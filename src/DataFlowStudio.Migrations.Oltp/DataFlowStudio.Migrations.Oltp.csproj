@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DataFlowStudio.Migrations.Oltp</RootNamespace>
+    <AssemblyName>DataFlowStudio.Migrations.Oltp</AssemblyName>
+    <!--
+      FluentMigrator discovers migrations via reflection, so this is a deploy-time tool, NOT a
+      Native-AOT path. E4's AOT constraint applies to the Ingestion Kafka worker, not to the
+      migration runner. It still uses no EF Core (FluentMigrator + raw SQL) — asserted by the
+      architecture tests.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator" />
+    <PackageReference Include="FluentMigrator.Runner" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+</Project>

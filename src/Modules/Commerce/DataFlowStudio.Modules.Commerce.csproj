@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>DataFlowStudio.Modules.Commerce</RootNamespace>
+    <AssemblyName>DataFlowStudio.Modules.Commerce</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Label="Dapper on the OLTP write-side (EF Core permitted here per E4, but Dapper keeps the whole solution driver-consistent)">
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+
+</Project>

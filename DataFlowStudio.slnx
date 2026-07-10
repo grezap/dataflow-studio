@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DataFlowStudio.Api/DataFlowStudio.Api.csproj" />
+    <Project Path="src/DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <Project Path="src/DataFlowStudio.Migrations.Oltp/DataFlowStudio.Migrations.Oltp.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/Commerce/DataFlowStudio.Modules.Commerce.csproj" />
+    <Project Path="src/Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
+    <Project Path="src/Modules/Warehouse/DataFlowStudio.Modules.Warehouse.csproj" />
+    <Project Path="src/Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DataFlowStudio.Architecture.Tests/DataFlowStudio.Architecture.Tests.csproj" />
+    <Project Path="tests/DataFlowStudio.Migrations.Tests/DataFlowStudio.Migrations.Tests.csproj" />
+    <Project Path="tests/DataFlowStudio.UnitTests/DataFlowStudio.UnitTests.csproj" />
+  </Folder>
+</Solution>

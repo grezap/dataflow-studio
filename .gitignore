@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+.vs/
+[Rr]elease/
+[Dd]ebug/
+TestResults/
+coverage/
+*.coverage
+*.trx
+*.received.*
+
+# Rider / VS Code
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Node (Husky + commitlint tooling only)
+node_modules/
+
+# Local secrets / connection overrides — never commit
+*.local.json
+appsettings.*.local.json
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db

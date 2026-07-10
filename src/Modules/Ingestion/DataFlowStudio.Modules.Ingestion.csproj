@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>DataFlowStudio.Modules.Ingestion</RootNamespace>
+    <AssemblyName>DataFlowStudio.Modules.Ingestion</AssemblyName>
+    <!-- E4: the Ingestion CDC->Kafka worker is a Native-AOT publish path. Dapper only; EF Core
+         is banned here and the ban is enforced by the architecture tests (NetArchTest). -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Label="AOT-safe deps only — Dapper for CDC reads; Nexus.Kafka/Nexus.Avro arrive Week 2">
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+
+</Project>

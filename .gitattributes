@@ -1,0 +1,30 @@
+# Normalize line endings — LF in the repo, native on checkout for scripts.
+* text=auto
+
+*.cs        text diff=csharp
+*.csproj    text
+*.slnx      text
+*.props     text
+*.targets   text
+*.json      text
+*.yml       text
+*.yaml      text
+*.md        text
+*.sql       text
+
+# Windows-only scripts stay CRLF
+*.ps1       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# Shell scripts stay LF
+*.sh        text eol=lf
+
+# Husky git hooks run under sh — must be LF regardless of platform
+.husky/**   text eol=lf
+
+# Binary
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.ico       binary

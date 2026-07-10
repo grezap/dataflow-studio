@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore DataFlowStudio.slnx
+
+      - name: Build (warnings are errors — see Directory.Build.props)
+        run: dotnet build DataFlowStudio.slnx -c Release --no-restore
+
+      - name: Format check
+        run: dotnet format DataFlowStudio.slnx --verify-no-changes --no-restore
+
+      # Runs the whole test suite, including the E1 acceptance gate: FluentMigrator
+      # up -> down -> up on a fresh SQL Server container (Testcontainers spins it via the
+      # runner's Docker daemon; no DFS_OLTP_TEST_CONNECTION is set in CI).
+      - name: Test (incl. E1 up->down->up migration gate)
+        run: dotnet test DataFlowStudio.slnx -c Release --no-build --verbosity normal

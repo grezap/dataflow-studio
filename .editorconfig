@@ -1,0 +1,70 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,js}]
+indent_size = 2
+
+[*.{ps1,psm1}]
+end_of_line = crlf
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Deliberate portfolio conventions (each a considered choice, not an oversight):
+#   CA1707 — FluentMigrator class prefixes (M001_) + underscore_test_naming (xUnit idiom)
+#   CA1000 — static factory methods on the generic Result<T> (Result pattern, E25)
+#   CA1716 — the 'Error'/'Result' type names are intentional (this is a C#-only solution)
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1000.severity = none
+dotnet_diagnostic.CA1716.severity = none
+
+# Language conventions (E25 modern C# — enforced in build via EnforceCodeStyleInBuild)
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_expression_bodied_members = true:silent
+csharp_style_prefer_pattern_matching = true:suggestion
+dotnet_style_prefer_collection_expression = true:suggestion
+csharp_style_prefer_top_level_statements = true:silent
+
+# Naming — private const & static-readonly fields read as pseudo-constants (PascalCase);
+# ordinary private instance fields use the _camelCase prefix. Specific rules are listed first
+# so they win for const / static-readonly symbols; the general rule catches the rest.
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+dotnet_naming_style.underscore_prefix.required_prefix = _
+dotnet_naming_style.underscore_prefix.capitalization = camel_case
+
+dotnet_naming_symbols.private_const_fields.applicable_kinds = field
+dotnet_naming_symbols.private_const_fields.applicable_accessibilities = private, internal
+dotnet_naming_symbols.private_const_fields.required_modifiers = const
+dotnet_naming_rule.private_const_pascal.severity = warning
+dotnet_naming_rule.private_const_pascal.symbols = private_const_fields
+dotnet_naming_rule.private_const_pascal.style = pascal_case
+
+dotnet_naming_symbols.private_static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_readonly_fields.applicable_accessibilities = private, internal
+dotnet_naming_symbols.private_static_readonly_fields.required_modifiers = static, readonly
+dotnet_naming_rule.private_static_readonly_pascal.severity = warning
+dotnet_naming_rule.private_static_readonly_pascal.symbols = private_static_readonly_fields
+dotnet_naming_rule.private_static_readonly_pascal.style = pascal_case
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_prefix

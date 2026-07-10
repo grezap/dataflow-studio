@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>DataFlowStudio.Api</RootNamespace>
+    <AssemblyName>DataFlowStudio.Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup Label="The Api is the composition root — the ONLY project allowed to reference every module (enforced by the architecture tests)">
+    <ProjectReference Include="../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <ProjectReference Include="../Modules/Commerce/DataFlowStudio.Modules.Commerce.csproj" />
+    <ProjectReference Include="../Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
+    <ProjectReference Include="../Modules/Warehouse/DataFlowStudio.Modules.Warehouse.csproj" />
+    <ProjectReference Include="../Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+</Project>

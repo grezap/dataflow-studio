@@ -1,0 +1,51 @@
+openapi: 3.1.0
+info:
+  title: DataFlow Studio API
+  version: 0.1.0
+  description: >
+    Operational + pipeline-control surface for DataFlow Studio (E14 governance artifact).
+    The host also generates a live spec at /openapi/v1.json (Development). This committed
+    document is the reviewed contract of record and grows as endpoints are added.
+  license:
+    name: MIT
+    url: https://github.com/grezap/dataflow-studio/blob/main/LICENSE
+servers:
+  - url: http://localhost:5080
+    description: Local (Aspire / dotnet run)
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Liveness probe for the DataFlow Studio host.
+      responses:
+        "200":
+          description: The host is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /modules:
+    get:
+      operationId: modules
+      summary: Lists the registered modular-monolith modules.
+      responses:
+        "200":
+          description: Module names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, moduleCount]
+      properties:
+        status:
+          type: string
+          example: healthy
+        moduleCount:
+          type: integer
+          format: int32
