@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup Label="E8 extraction: Result/Error/AuditColumns now come from the shared package (nexus-shared)">
+    <PackageReference Include="Nexus.Primitives" />
+  </ItemGroup>
+
 </Project>
