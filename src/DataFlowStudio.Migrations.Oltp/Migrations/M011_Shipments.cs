@@ -2,10 +2,11 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Shipments — fulfilment records for an order; FK -> Orders.
+/// <summary><c>dbo.Shipments</c> — fulfilment/tracking records for an order; FK → <c>Orders</c>.</summary>
 [Migration(20260711011L)]
 public sealed class M011_Shipments : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Shipments (
@@ -25,5 +26,6 @@ public sealed class M011_Shipments : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.Shipments;");
 }

@@ -2,10 +2,14 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.ProductInventory — composite PK (ProductId, WarehouseId); FKs -> Products, Warehouses.
+/// <summary>
+/// <c>dbo.ProductInventory</c> — per-warehouse stock levels. Composite PK
+/// (<c>ProductId, WarehouseId</c>); FKs → <c>dbo.Products</c> and <c>dbo.Warehouses</c>.
+/// </summary>
 [Migration(20260711007L)]
 public sealed class M007_ProductInventory : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.ProductInventory (
@@ -25,5 +29,6 @@ public sealed class M007_ProductInventory : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.ProductInventory;");
 }

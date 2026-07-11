@@ -11,6 +11,10 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition=" '$(GITHUB_ACTIONS)' == 'true' ">true</ContinuousIntegrationBuild>
+    <!-- Documentation is a hard rule (see docs/architecture.md + the code-docs standing rule):
+         generating the XML doc file turns every undocumented public member into CS1591, which
+         warnings-as-errors then fails the build. Test projects opt out (they set this false). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Label="Repository metadata">

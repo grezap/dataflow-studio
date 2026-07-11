@@ -11,8 +11,10 @@ namespace DataFlowStudio.Modules.Warehouse;
 /// </summary>
 public sealed class WarehouseModule : IModule
 {
+    /// <inheritdoc />
     public string Name => "warehouse";
 
+    /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         // Week 3: StarRocks loaders + DbUp migration runner.

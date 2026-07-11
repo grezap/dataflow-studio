@@ -12,8 +12,10 @@ namespace DataFlowStudio.Modules.Commerce;
 /// </summary>
 public sealed class CommerceModule : IModule
 {
+    /// <inheritdoc />
     public string Name => "commerce";
 
+    /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         // Week-1 slice: schema + migrations. Repositories / command handlers land with the

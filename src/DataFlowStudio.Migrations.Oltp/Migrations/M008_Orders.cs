@@ -2,10 +2,14 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Orders — FKs -> Customers and CustomerAddresses (billing + shipping).
+/// <summary>
+/// <c>dbo.Orders</c> — order headers. FKs → <c>dbo.Customers</c> and (twice) to
+/// <c>dbo.CustomerAddresses</c> for billing + shipping.
+/// </summary>
 [Migration(20260711008L)]
 public sealed class M008_Orders : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Orders (
@@ -30,5 +34,6 @@ public sealed class M008_Orders : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.Orders;");
 }

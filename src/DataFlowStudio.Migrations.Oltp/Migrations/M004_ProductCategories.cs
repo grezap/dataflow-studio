@@ -2,10 +2,11 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.ProductCategories — self-referencing hierarchy (ParentId -> CategoryId).
+/// <summary><c>dbo.ProductCategories</c> — self-referencing category hierarchy (ParentId → CategoryId).</summary>
 [Migration(20260711004L)]
 public sealed class M004_ProductCategories : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.ProductCategories (
@@ -23,5 +24,6 @@ public sealed class M004_ProductCategories : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.ProductCategories;");
 }

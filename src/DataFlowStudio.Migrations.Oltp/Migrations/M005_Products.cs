@@ -2,10 +2,14 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Products — system-versioned temporal table; FK -> dbo.ProductCategories.
+/// <summary>
+/// <c>dbo.Products</c> — a system-versioned temporal table; FK → <c>dbo.ProductCategories</c>.
+/// SQL Server auto-creates <c>ProductsHistory</c> for point-in-time queries and SCD2 loads.
+/// </summary>
 [Migration(20260711005L)]
 public sealed class M005_Products : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Products (
@@ -29,7 +33,9 @@ public sealed class M005_Products : Migration
         ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.ProductsHistory));
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql(
+        // Disable system-versioning before dropping, then drop both the current and history tables.
         """
         ALTER TABLE dbo.Products SET (SYSTEM_VERSIONING = OFF);
         DROP TABLE dbo.Products;

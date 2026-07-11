@@ -2,10 +2,11 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Transactions — payment events for an order; FK -> Orders.
+/// <summary><c>dbo.Transactions</c> — payment events (auth/capture/refund/chargeback); FK → <c>Orders</c>.</summary>
 [Migration(20260711010L)]
 public sealed class M010_Transactions : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Transactions (
@@ -26,5 +27,6 @@ public sealed class M010_Transactions : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.Transactions;");
 }

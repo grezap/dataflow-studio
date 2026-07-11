@@ -2,10 +2,14 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// audit.ChangeLog — application-level change journal (BeforeJson / AfterJson per row change).
+/// <summary>
+/// <c>audit.ChangeLog</c> — an application-level change journal capturing before/after JSON per row
+/// change. Complements SQL Server CDC with a human-readable, queryable audit trail.
+/// </summary>
 [Migration(20260711012L)]
 public sealed class M012_AuditChangeLog : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE audit.ChangeLog (
@@ -20,5 +24,6 @@ public sealed class M012_AuditChangeLog : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE audit.ChangeLog;");
 }

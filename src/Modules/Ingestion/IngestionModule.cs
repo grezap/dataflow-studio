@@ -14,10 +14,14 @@ namespace DataFlowStudio.Modules.Ingestion;
 /// </summary>
 public sealed class IngestionModule : IModule
 {
+    /// <inheritdoc />
     public string Name => "ingestion";
 
+    /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        // Register the long-running CDC pump as a hosted background service so the Api host owns
+        // its lifetime (started on boot, gracefully stopped on shutdown).
         services.AddHostedService<CdcPublishWorker>();
     }
 }

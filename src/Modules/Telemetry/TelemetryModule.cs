@@ -11,8 +11,10 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// </summary>
 public sealed class TelemetryModule : IModule
 {
+    /// <inheritdoc />
     public string Name => "telemetry";
 
+    /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
         // Week 3: ClickHouse writers (pipeline_events / cdc_lag_seconds / error_events).

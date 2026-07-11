@@ -2,10 +2,11 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Warehouses — reference table for inventory + fulfilment.
+/// <summary><c>dbo.Warehouses</c> — reference table for inventory and order fulfilment.</summary>
 [Migration(20260711006L)]
 public sealed class M006_Warehouses : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Warehouses (
@@ -24,5 +25,6 @@ public sealed class M006_Warehouses : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.Warehouses;");
 }

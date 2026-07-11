@@ -3,6 +3,8 @@
   <PropertyGroup>
     <RootNamespace>DataFlowStudio.UnitTests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <!-- Tests are self-documenting via descriptive method names; no XML-doc requirement. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

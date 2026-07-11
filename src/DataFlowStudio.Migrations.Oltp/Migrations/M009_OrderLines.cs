@@ -2,10 +2,15 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.OrderLines — FKs -> Orders, Products, Warehouses; PERSISTED computed LineTotalUsd.
+/// <summary>
+/// <c>dbo.OrderLines</c> — line items. FKs → <c>Orders</c>, <c>Products</c>, <c>Warehouses</c>.
+/// <c>LineTotalUsd</c> is a PERSISTED computed column so the line total is stored + indexable and
+/// can never drift from quantity × price − discount.
+/// </summary>
 [Migration(20260711009L)]
 public sealed class M009_OrderLines : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.OrderLines (
@@ -26,5 +31,6 @@ public sealed class M009_OrderLines : Migration
         );
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql("DROP TABLE dbo.OrderLines;");
 }

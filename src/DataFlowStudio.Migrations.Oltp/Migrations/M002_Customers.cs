@@ -2,10 +2,14 @@ using FluentMigrator;
 
 namespace DataFlowStudio.Migrations.Oltp.Migrations;
 
-// dbo.Customers — system-versioned temporal table with the standard six audit columns (E6).
+/// <summary>
+/// <c>dbo.Customers</c> — a system-versioned temporal table with the standard six audit columns
+/// (E6). SQL Server auto-creates the <c>CustomersHistory</c> table to retain every prior version.
+/// </summary>
 [Migration(20260711002L)]
 public sealed class M002_Customers : Migration
 {
+    /// <inheritdoc />
     public override void Up() => Execute.Sql(
         """
         CREATE TABLE dbo.Customers (
@@ -29,7 +33,10 @@ public sealed class M002_Customers : Migration
         ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.CustomersHistory));
         """);
 
+    /// <inheritdoc />
     public override void Down() => Execute.Sql(
+        // System-versioning must be turned OFF before either table can be dropped, else SQL Server
+        // rejects the DROP. This is exactly the case the E1 up->down->up gate exercises.
         """
         ALTER TABLE dbo.Customers SET (SYSTEM_VERSIONING = OFF);
         DROP TABLE dbo.Customers;

@@ -22,5 +22,9 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 - **Repo hygiene** — README (14-section), CONTRIBUTING, ADR-0001/0002, `docs/sql-showcase.md`,
   OpenAPI + AsyncAPI stubs, devcontainer, GitHub Actions CI, Dependabot, PR template, Conventional
   Commits tooling.
+- **Documentation as a rule** — `docs/architecture.md` with rendered Mermaid diagrams (system
+  context, module dependency graph, a row's end-to-end journey, cross-system blast-radius). XML
+  `<summary>` docs on every public type/member plus analytical inline comments, **enforced in build**
+  via `GenerateDocumentationFile` (missing public docs = CS1591 error under warnings-as-errors).
 
 [Unreleased]: https://github.com/grezap/dataflow-studio/commits/main

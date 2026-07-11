@@ -3,6 +3,8 @@
   <PropertyGroup>
     <RootNamespace>DataFlowStudio.Architecture.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <!-- Tests are self-documenting via descriptive method names; no XML-doc requirement. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup Label="Every assembly whose dependency rules we enforce">

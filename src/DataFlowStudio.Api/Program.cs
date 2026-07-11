@@ -44,7 +44,14 @@ app.MapGet("/modules", () => Results.Ok(modules.Select(m => m.Name).ToArray()))
 
 app.Run();
 
+/// <summary>Payload of the <c>/health</c> endpoint: liveness status and the number of loaded modules.</summary>
+/// <param name="Status">Health string (currently always <c>healthy</c> when the host is up).</param>
+/// <param name="ModuleCount">How many modules the composition root wired in.</param>
 internal sealed record HealthResponse(string Status, int ModuleCount);
 
-// Exposed so a future WebApplicationFactory-based integration test can boot the host in-process.
+/// <summary>
+/// The application entry point. Declared <c>public partial</c> (rather than the implicit internal
+/// top-level program) so a future <c>WebApplicationFactory&lt;Program&gt;</c> integration test can
+/// boot the host in-process.
+/// </summary>
 public partial class Program;
