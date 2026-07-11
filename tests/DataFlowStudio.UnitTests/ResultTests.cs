@@ -1,5 +1,5 @@
-using DataFlowStudio.SharedKernel;
 using FluentAssertions;
+using Nexus.Primitives;
 using Xunit;
 
 namespace DataFlowStudio.UnitTests;

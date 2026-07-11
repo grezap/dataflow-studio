@@ -118,10 +118,13 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 
 | Week | Slice | Status |
 |---|---|---|
-| 1 | Solution scaffold · OltpDb migrations · E1 gate · repo hygiene | ✅ in progress |
-| 2 | CDC → Kafka (Avro) · Schema Registry · AsyncAPI · first `nexus-shared` consumption · OpenLineage | ⏳ |
+| 1 | Solution scaffold · OltpDb migrations · E1 gate · repo hygiene | ✅ done |
+| 2 | CDC → Kafka: OltpDb on the AG · Debezium raw · **.NET curation → Avro** · Schema Registry · `nexus-shared` consumed · [5-face demo](docs/demos/watch-the-pipeline.md) | ✅ done (live) |
 | 3 | StarRocks DWH + ClickHouse telemetry (DbUp) · OTel + Marquez | ⏳ |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
+
+**Week 2 is live on the lab.** Run `.\scripts\dfs-trace.ps1` to watch one record travel all five
+faces (OLTP → CDC → Debezium → curated Avro → sink); see [docs/demos/watch-the-pipeline.md](docs/demos/watch-the-pipeline.md).
 
 ## 14. License
 

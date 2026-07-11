@@ -46,7 +46,31 @@ SET LifetimeValueUsd = @newValue, modified_utc = SYSUTCDATETIME(), modified_by =
 WHERE CustomerId = @id AND row_version = @expectedRowVersion;   -- 0 rows affected => concurrency conflict
 ```
 
-## Planned (Weeks 2–3)
+## 4. Change Data Capture (CDC)
+
+CDC is enabled on `OltpDb` so the pipeline reads committed changes from the transaction log — never
+by querying (and contending with) the live OLTP tables. Enablement:
+
+```sql
+EXEC sys.sp_cdc_enable_db;
+EXEC sys.sp_cdc_enable_table @source_schema = 'dbo', @source_name = 'Customers',
+     @role_name = NULL, @supports_net_changes = 0;   -- (repeated per business table)
+```
+
+Read what CDC captured (this is exactly what Debezium streams):
+
+```sql
+SELECT __$operation,                       -- 1=delete 2=insert 3/4=update(before/after)
+       sys.fn_varbintohexstr(__$start_lsn) AS lsn,
+       CustomerCode, DisplayName
+FROM OltpDb.cdc.dbo_Customers_CT
+ORDER BY __$start_lsn DESC;
+```
+
+The SQL Agent capture job populates `cdc.dbo_*_CT` from the log; CDC on the system-versioned temporal
+tables (`Customers`, `Products`) is supported and works alongside `SYSTEM_VERSIONING`.
+
+## Planned (Week 3)
 
 - Recursive CTE over `dbo.ProductCategories` (self-referencing hierarchy).
 - Window functions with frames for running order totals / customer lifetime value.

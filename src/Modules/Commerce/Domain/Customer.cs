@@ -1,4 +1,4 @@
-using DataFlowStudio.SharedKernel;
+using Nexus.Primitives;
 
 namespace DataFlowStudio.Modules.Commerce.Domain;
 
