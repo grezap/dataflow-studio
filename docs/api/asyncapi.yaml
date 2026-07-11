@@ -1,48 +1,90 @@
 asyncapi: 3.0.0
 info:
   title: DataFlow Studio — CDC Streams
-  version: 0.1.0
+  version: 0.2.0
   description: >
-    Kafka topics carrying change-data-capture events from OltpDb, serialized as Avro via the
-    Schema Registry (E14 / E16). This is a Week-1 stub of record; concrete channels + Avro payload
-    schemas are finalized in the Week-2 CDC → Kafka slice.
+    Kafka topics in the DataFlow Studio pipeline (E14 / E16). SQL Server CDC on OltpDb is captured by
+    Debezium into raw JSON topics; the .NET curation worker reshapes those into clean domain events
+    serialized as Avro via the Schema Registry (ADR-0003, ADR-0004). This spec documents both hops.
   license:
     name: MIT
     url: https://github.com/grezap/dataflow-studio/blob/main/LICENSE
 servers:
   kafka-east:
-    host: kafka-east.nexus.lab:9092
+    host: 192.168.10.21:9092
     protocol: kafka-secure
-    description: Primary KRaft cluster (mTLS). Schema Registry at schema-registry.nexus.lab.
-defaultContentType: application/avro
+    description: >
+      Primary KRaft cluster (mutual TLS; brokers advertise the backplane 192.168.10.21-23:9092).
+      Schema Registry at 192.168.70.91:8081. Clients present a Vault-issued mTLS cert and hold
+      least-privilege ACLs.
+defaultContentType: application/json
 channels:
-  oltp.customers:
-    address: oltp.customers
-    description: CDC events for dbo.Customers (insert / update / delete).
+  rawCustomers:
+    address: oltp.OltpDb.dbo.Customers
+    description: >
+      Raw CDC for dbo.Customers, produced by the Debezium SQL Server connector 'oltp-cdc'. JSON
+      Debezium envelope (before/after/source/op). Topic name = <topic.prefix>.<db>.<schema>.<table>.
+    messages:
+      customerCdc:
+        $ref: '#/components/messages/DebeziumCustomerEnvelope'
+  curatedCustomerChanged:
+    address: dfs.customers.changed.v1
+    description: >
+      Curated domain event for a customer change, produced by the .NET curation worker. Avro, schema
+      registered under subject 'dfs.customers.changed.v1-value'. This is the contract downstream
+      consumers (StarRocks dwh, ClickHouse analytics) bind to.
     messages:
       customerChanged:
-        $ref: "#/components/messages/CustomerChanged"
+        $ref: '#/components/messages/CustomerChanged'
 operations:
-  onCustomerChanged:
+  onRawCustomer:
     action: receive
     channel:
-      $ref: "#/channels/oltp.customers"
-    summary: A dbo.Customers row changed in OltpDb.
+      $ref: '#/channels/rawCustomers'
+    summary: The curation worker consumes raw Debezium CDC for dbo.Customers.
+  publishCuratedCustomer:
+    action: send
+    channel:
+      $ref: '#/channels/curatedCustomerChanged'
+    summary: The curation worker publishes the curated CustomerChanged event.
 components:
   messages:
+    DebeziumCustomerEnvelope:
+      name: DebeziumCustomerEnvelope
+      title: Debezium CDC envelope (dbo.Customers)
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          op:
+            type: string
+            description: 'r=snapshot, c=create, u=update, d=delete'
+          before: { type: [object, 'null'] }
+          after:
+            type: object
+            description: The full row after the change (columns + audit + temporal fields).
+          source:
+            type: object
+            properties:
+              lsn: { type: string }
+              ts_ms: { type: integer }
     CustomerChanged:
       name: CustomerChanged
-      title: Customer changed
+      title: Customer changed (curated)
       contentType: application/avro
       payload:
         schemaFormat: application/vnd.apache.avro;version=1.9.0
         schema:
           type: record
           name: CustomerChanged
-          namespace: com.nexusplatform.dataflowstudio.oltp
+          namespace: com.nexusplatform.dataflowstudio.curated
           fields:
-            - { name: eventId, type: string }
-            - { name: occurredUtc, type: { type: long, logicalType: timestamp-millis } }
             - { name: customerId, type: long }
             - { name: customerCode, type: string }
-            - { name: operation, type: { type: enum, name: ChangeOperation, symbols: [Insert, Update, Delete] } }
+            - { name: displayName, type: string }
+            - { name: email, type: string }
+            - { name: status, type: int }
+            - { name: lifetimeValueUsd, type: string }
+            - { name: operation, type: string }
+            - { name: sourceTsMs, type: long }
+            - { name: curatedAtUtc, type: long }

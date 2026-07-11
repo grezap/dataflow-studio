@@ -6,6 +6,21 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 2: CDC → Kafka, live on the lab
+
+- **`OltpDb` on the SQL Server AG** — the schema (11 tables) applied by the FluentMigrator runner
+  against the live Always-On primary, with **SQL Server CDC enabled** on every business table.
+- **Debezium** SQL Server connector (`oltp-cdc`) streaming raw CDC → Kafka JSON topics over mTLS
+  (schema-history producer mTLS; Connect KIP-158 topic creation).
+- **`DataFlowStudio.Trace`** — a runnable 5-face demo (`scripts/dfs-trace.ps1`) that follows one
+  record OLTP → CDC → Debezium raw → **curated Avro** (Schema Registry) → sink, consuming
+  `Nexus.Kafka` / `Nexus.Avro` / `Nexus.Primitives` from GitHub Packages over mTLS (least-privilege
+  Kafka ACLs for the app principal).
+- **E8 extraction** — `Result`/`Error`/`AuditColumns` now come from the published `Nexus.Primitives`.
+- **Docs** — ADR-0003 (Avro + Schema Registry, AOT relaxation), ADR-0004 (CDC transport: Debezium +
+  curation), AsyncAPI for the raw + curated topics, and `docs/demos/watch-the-pipeline.md` (by-hand
+  observation with SSMS + Kafka console tools).
+
 ### Added
 
 - **Solution scaffold** — modular-monolith solution (`.slnx`): `Api` composition root, `SharedKernel`,

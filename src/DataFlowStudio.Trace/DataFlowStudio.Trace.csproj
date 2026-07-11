@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DataFlowStudio.Trace</RootNamespace>
+    <AssemblyName>DataFlowStudio.Trace</AssemblyName>
+    <!-- Runnable demo tool (not a library); no XML-doc requirement. Not an AOT path — it pulls in
+         Confluent.Kafka + Avro (reflection/native), the documented AOT relaxation for the Avro
+         serdes (ADR-0003). -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup Label="nexus-shared + SQL client — the pipeline building blocks">
+    <PackageReference Include="Nexus.Primitives" />
+    <PackageReference Include="Nexus.Kafka" />
+    <PackageReference Include="Nexus.Avro" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+</Project>

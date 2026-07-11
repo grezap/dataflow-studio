@@ -175,6 +175,12 @@ sequenceDiagram
 - Steps 6–9: the two legs are **independent consumers** — the warehouse and telemetry can fail,
   restart, or lag independently without losing data (Kafka retains the log).
 
+> **This is live (Week 2).** OltpDb runs on the SQL Server AG with CDC enabled; Debezium streams the
+> raw change to Kafka; the .NET curation worker reshapes it to a schema-registered Avro event
+> ([ADR-0004](adr/ADR-0004-cdc-transport-debezium-curation.md), [ADR-0003](adr/ADR-0003-avro-schema-registry.md)).
+> Run `.\scripts\dfs-trace.ps1` to watch one record traverse all five faces, or follow it by hand via
+> [docs/demos/watch-the-pipeline.md](demos/watch-the-pipeline.md).
+
 ---
 
 ## 5. How each system affects the others (coupling & blast radius)

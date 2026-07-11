@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read      # restore the Nexus.* family from GitHub Packages
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,6 +17,9 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    # nuget.config resolves the GitHub Packages feed credential from this env var.
+    env:
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
