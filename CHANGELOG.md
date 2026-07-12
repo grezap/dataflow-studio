@@ -6,6 +6,22 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 3 (Session 3A): sink schema migrations (DbUp)
+
+- **`DataFlowStudio.Migrations.Starrocks`** — DbUp (`dbup-mysql` over MySqlConnector) reproducing the
+  `dwh` Kimball star (5 dimensions, 4 facts, `bridge_customer_seg`) + an `analytics` serving view,
+  with a StarRocks-compatible journal (`StarRocksTableJournal`) and a `$replicationNum$` variable
+  (3 for the lab, 1 for a single-backend container).
+- **`DataFlowStudio.Migrations.Clickhouse`** — a purpose-built, DbUp-pattern runner over
+  `ClickHouse.Client` reproducing the `analytics` telemetry schema (`pipeline_events` local +
+  Distributed, the `pipeline_latency_by_hour` AggregatingMergeTree MV, `cdc_lag_seconds`,
+  `error_events`), with lab-vs-single-node profiles (`Replicated*MergeTree` + `ON CLUSTER` vs plain).
+- **Idempotency gates (E1, forward-only)** — `apply → re-apply` on throwaway `starrocks/allin1` +
+  `clickhouse-server` containers; both green. The gates caught four defects in the authored DDL
+  (PK distribution key, colocation bucket count, key-column order, `nexus_ch` → `nexus_analytics`),
+  fixed in the scripts and mirrored back into `schemas/dataflow-studio/README.md`.
+- **ADR-0005** — DbUp migrations for the StarRocks + ClickHouse sinks (the split + the corrections).
+
 ### Added — Week 2: CDC → Kafka, live on the lab
 
 - **`OltpDb` on the SQL Server AG** — the schema (11 tables) applied by the FluentMigrator runner

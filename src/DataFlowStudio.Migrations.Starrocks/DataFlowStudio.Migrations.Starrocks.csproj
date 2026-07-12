@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DataFlowStudio.Migrations.Starrocks</RootNamespace>
+    <AssemblyName>DataFlowStudio.Migrations.Starrocks</AssemblyName>
+    <!--
+      DbUp discovers embedded .sql scripts via reflection, so this is a deploy-time tool, NOT a
+      Native-AOT path (E4's AOT constraint applies to the Ingestion Kafka worker only). It uses no
+      EF Core (DbUp + raw SQL over MySqlConnector) — asserted by the architecture tests.
+      StarRocks speaks the MySQL wire protocol on the FE query port (:9030), so the DbUp MySQL
+      provider drives it; the StarRocks-specific journal DDL lives in StarRocksTableJournal.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup Label="The forward-only DbUp scripts that reproduce the authored dwh + analytics DDL">
+    <EmbeddedResource Include="Scripts\**\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-core" />
+    <PackageReference Include="dbup-mysql" />
+    <PackageReference Include="MySqlConnector" />
+  </ItemGroup>
+
+</Project>

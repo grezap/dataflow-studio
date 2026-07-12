@@ -125,15 +125,19 @@ flowchart TD
 - **The Api is the only integrator.** It instantiates each module explicitly (no reflection) and
   lets it self-register via `IModule.RegisterServices`. One place wires everything → predictable
   startup, trim/AOT-friendly.
-- **Migrations.Oltp stands apart.** It owns the `OltpDb` schema and runs at deploy time. It uses
-  FluentMigrator + raw SQL (no EF Core), so it never pollutes the runtime paths.
+- **The migration tools stand apart.** Three deploy-time tools own their store's schema and never
+  pollute the runtime paths (all raw SQL, no EF Core): `Migrations.Oltp` (FluentMigrator, reversible
+  `up → down → up`); `Migrations.Starrocks` (DbUp over MySqlConnector, forward-only) for the `dwh`
+  star; and `Migrations.Clickhouse` (a DbUp-pattern runner over `ClickHouse.Client`, forward-only)
+  for the `analytics` telemetry schema. The two sink migrations gate on `apply → re-apply`
+  idempotency against throwaway containers (ADR-0005).
 
 | Module | Owns | Talks to | Status |
 |---|---|---|---|
 | **Commerce** | OLTP write-side over `OltpDb` (source of truth) | SQL Server (Dapper) | domain types real; write-side Week 2 |
 | **Ingestion** | CDC capture → Avro → Kafka (**AOT path**) | SQL Server CDC (Dapper), Kafka, Schema Registry | worker skeleton; body Week 2 |
-| **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts) | Kafka (consume), StarRocks | skeleton; Week 3 |
-| **Telemetry** | Pipeline telemetry (lag/latency/errors) | ClickHouse | skeleton; Week 3 |
+| **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts) | Kafka (consume), StarRocks | schema migrated (3A); loaders Week 3 (3C) |
+| **Telemetry** | Pipeline telemetry (lag/latency/errors) | ClickHouse | schema migrated (3A); writers Week 3 (3D) |
 
 ---
 

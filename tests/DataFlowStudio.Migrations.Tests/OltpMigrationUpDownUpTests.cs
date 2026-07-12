@@ -40,7 +40,8 @@ public sealed class OltpMigrationUpDownUpTests : IAsyncLifetime
         }
         else
         {
-            _container = new MsSqlBuilder().Build();
+            // Testcontainers 4.13 requires an explicit image (the parameterless builder is obsolete).
+            _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
             await _container.StartAsync();
             masterConnectionString = _container.GetConnectionString();
         }

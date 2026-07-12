@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DataFlowStudio.Migrations.Clickhouse</RootNamespace>
+    <AssemblyName>DataFlowStudio.Migrations.Clickhouse</AssemblyName>
+    <!--
+      ClickHouse has no DbUp provider, and its lack of transactions + its ON CLUSTER DDL make DbUp's
+      generic script executor a poor fit. This is a deploy-time tool (not a Native-AOT path) that
+      follows DbUp's journal-table pattern with a purpose-built runner over ClickHouse.Client — see
+      ADR-0005. No EF Core (raw SQL over ADO) — asserted by the architecture tests.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup Label="The forward-only scripts that reproduce the authored analytics telemetry DDL">
+    <EmbeddedResource Include="Scripts\**\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClickHouse.Client" />
+  </ItemGroup>
+
+</Project>
