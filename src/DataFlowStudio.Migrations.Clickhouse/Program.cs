@@ -1,4 +1,3 @@
-using ClickHouse.Client.ADO;
 using DataFlowStudio.Migrations.Clickhouse;
 
 // Deploy-time migration tool for the ClickHouse analytics telemetry schema (wired into
@@ -9,6 +8,8 @@ using DataFlowStudio.Migrations.Clickhouse;
 // The connection string resolves from --connection / -c, else DFS_CLICKHOUSE_CONNECTION. It targets
 // a ClickHouse HTTP(S) interface, e.g.
 //   "Host=192.168.70.44;Port=8443;Protocol=https;Username=admin;Password=***;Database=default"
+// The lab's HTTPS interface uses the private Vault-PKI root, so set DFS_CLICKHOUSE_CACERT to the CA
+// bundle to trust it (and DFS_CLICKHOUSE_CLIENT_PFX[/_PASSWORD] for mTLS if required).
 // The lab is a replicated nexus_analytics cluster (default profile); pass --single-node for a lone
 // container. Migrations are forward-only; re-running is a safe no-op (journal table).
 
@@ -31,7 +32,12 @@ if (command != "up")
 }
 
 var profile = singleNode ? ClickHouseMigrationProfile.SingleNode() : ClickHouseMigrationProfile.Lab();
-var result = ClickHouseMigrationRunner.MigrateUp(() => new ClickHouseConnection(connectionString), profile);
+var caCertPath = Environment.GetEnvironmentVariable("DFS_CLICKHOUSE_CACERT");
+var clientPfxPath = Environment.GetEnvironmentVariable("DFS_CLICKHOUSE_CLIENT_PFX");
+var clientPfxPassword = Environment.GetEnvironmentVariable("DFS_CLICKHOUSE_CLIENT_PFX_PASSWORD");
+var result = ClickHouseMigrationRunner.MigrateUp(
+    () => TlsClickHouseConnectionFactory.Create(connectionString, caCertPath, clientPfxPath, clientPfxPassword),
+    profile);
 if (result.Successful)
 {
     Console.WriteLine($"ClickHouse migration succeeded ({result.ScriptsExecuted.Count} script(s) applied).");
