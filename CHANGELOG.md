@@ -6,6 +6,24 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 3 (Session 3C): StarRocks DWH sink (SCD2 dimensions + facts)
+
+- **Warehouse sink** (ADR-0006) — the Warehouse module consumes the curated Avro topics and loads the
+  Kimball star over the MySQL wire: **SCD2** `dim_customer`/`dim_product` (close-current + insert new
+  version by surrogate key; unchanged → no-op), SCD1 `dim_warehouse`/`dim_carrier`, generated
+  `dim_date`, and the four facts (`fact_order`/`fact_order_line`/`fact_transaction`/
+  `fact_inventory_snap`) with on-demand range-partition creation. Loads in dependency order; inserts
+  are batched (StarRocks penalises single-row inserts); `line_total_usd` is recomputed.
+- **Runnable sink** — `DataFlowStudio.WarehouseSink` (drain, `scripts/dfs-warehouse-sink.ps1`) +
+  the hosted `WarehouseSinkWorker` (timer), sharing one `WarehouseSinkEngine`.
+- **ADR-0006** (sink load strategy: StarRocks .NET worker now; ClickHouse-native in 3D) + Sql-literal
+  unit tests. At-least-once curated topics are deduped by natural key; every load path is idempotent.
+- **Live-proven on the lab** — loaded **59 curated records** into the star: dim_customer(8)/dim_product(6)
+  current, dim_warehouse(3), dim_carrier(2), dim_date(5), fact_order(4)/fact_order_line(6)/
+  fact_transaction(4)/fact_inventory_snap(18); a star join resolves SCD2 surrogate keys; a re-run adds
+  no versions/rows (idempotent). One fix surfaced live: `product-inventory` is keyed by product alone,
+  so the sink dedups it by its full (product, warehouse) grain.
+
 ### Added — Week 3 (Session 3B): source replay — curated events for all order-flow entities
 
 - **Data-driven curation catalog** (ADR-0007) — one `EntityCurationSpec` per order-flow entity
