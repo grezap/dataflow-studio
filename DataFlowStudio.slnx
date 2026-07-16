@@ -6,6 +6,8 @@
     <Project Path="src/DataFlowStudio.Migrations.Starrocks/DataFlowStudio.Migrations.Starrocks.csproj" />
     <Project Path="src/DataFlowStudio.Migrations.Clickhouse/DataFlowStudio.Migrations.Clickhouse.csproj" />
     <Project Path="src/DataFlowStudio.Trace/DataFlowStudio.Trace.csproj" />
+    <Project Path="src/DataFlowStudio.Curation/DataFlowStudio.Curation.csproj" />
+    <Project Path="src/DataFlowStudio.Seed/DataFlowStudio.Seed.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/Commerce/DataFlowStudio.Modules.Commerce.csproj" />

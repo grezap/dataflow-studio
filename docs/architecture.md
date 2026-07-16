@@ -135,7 +135,7 @@ flowchart TD
 | Module | Owns | Talks to | Status |
 |---|---|---|---|
 | **Commerce** | OLTP write-side over `OltpDb` (source of truth) | SQL Server (Dapper) | domain types real; write-side Week 2 |
-| **Ingestion** | CDC capture → Avro → Kafka (**AOT path**) | SQL Server CDC (Dapper), Kafka, Schema Registry | worker skeleton; body Week 2 |
+| **Ingestion** | CDC curation: raw Debezium → curated Avro, data-driven catalog (non-AOT, no EF) | Kafka (raw + curated), Schema Registry | all 10 order-flow entities (3B; ADR-0007) |
 | **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts) | Kafka (consume), StarRocks | schema migrated (3A); loaders Week 3 (3C) |
 | **Telemetry** | Pipeline telemetry (lag/latency/errors) | ClickHouse | schema migrated (3A); writers Week 3 (3D) |
 

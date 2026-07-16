@@ -6,6 +6,32 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 3 (Session 3B): source replay — curated events for all order-flow entities
+
+- **Data-driven curation catalog** (ADR-0007) — one `EntityCurationSpec` per order-flow entity
+  (customers, product categories, products, warehouses, customer addresses, orders, order lines,
+  transactions, shipments, product inventory) mapping a Debezium raw topic → `dfs.<entity>.changed.v1`
+  + a generated curated Avro schema. Adding an entity is a list entry, not new worker code.
+- **Curation engine + worker** — the Ingestion module is now the real (non-AOT) CDC curation worker:
+  consume raw Debezium JSON → project (`CuratedRecordProjector`, pure + unit-tested) → produce curated
+  Avro through the Schema Registry. Runs continuously (`CurationWorker`) or in drain mode (the
+  runnable `DataFlowStudio.Curation` console, `scripts/dfs-curate.ps1`). Decimals carried as strings;
+  timestamps as epoch-millis longs.
+- **Seed tool** (`DataFlowStudio.Seed`, `scripts/dfs-seed.ps1`) — an idempotent, representative
+  OltpDb order-flow dataset (4 customers, 6 products, 3 warehouses, 4 orders + lines/transactions/
+  shipments/inventory) so the curated topics have real content.
+- **AsyncAPI 0.3.0** — all ten curated channels + the shared curated-change envelope.
+- **AOT resolution (ADR-0007)** — Debezium+curation (ADR-0004) + reflection-based Avro serdes
+  (ADR-0003) leave no Native-AOT .NET worker; the Ingestion module drops its AOT badge but keeps the
+  no-EF-Core invariant (still enforced by the architecture tests).
+- **Live-proven on the lab** — seeded OltpDb → Debezium captured all 10 tables (`time.precision.mode
+  =connect`) → the curator produced **59 curated records across all 10 topics**, all 10 Schema
+  Registry subjects registered. Two refinements surfaced live: curated Avro fields now carry
+  **defaults** so schema evolution is BACKWARD-compatible (adding `preferredLocale` made customers a
+  clean v2); and the computed `LineTotalUsd` column (stored NULL by SQL Server CDC) is **not carried**
+  — the DWH loader recomputes it. At-least-once delivery means curated topics can carry duplicates
+  (keyed by natural key), so the sink loaders (3C) must be idempotent/upsert.
+
 ### Added — Week 3 (Session 3A): sink schema migrations (DbUp)
 
 - **`DataFlowStudio.Migrations.Starrocks`** — DbUp (`dbup-mysql` over MySqlConnector) reproducing the

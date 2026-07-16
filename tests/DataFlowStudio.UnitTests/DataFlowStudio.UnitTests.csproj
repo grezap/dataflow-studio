@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <ProjectReference Include="../../src/Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
   </ItemGroup>
 
   <ItemGroup>
