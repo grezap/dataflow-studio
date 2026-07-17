@@ -19,7 +19,7 @@ enforced architecture boundaries, reversible database migrations, and first-clas
 
 | Dimension | In this project |
 |---|---|
-| **.NET engineering + architecture** | Modular monolith with module boundaries enforced by NetArchTest ([ADR-0001](docs/adr/ADR-0001-modular-monolith.md)); Native-AOT Kafka worker ([ADR-0002](docs/adr/ADR-0002-dapper-fluentmigrator-on-aot-paths.md)). |
+| **.NET engineering + architecture** | Modular monolith with module boundaries enforced by NetArchTest ([ADR-0001](docs/adr/ADR-0001-modular-monolith.md)); Dapper + raw SQL with **no EF Core** on the CDC + migration paths, enforced by the architecture tests ([ADR-0002](docs/adr/ADR-0002-dapper-fluentmigrator-on-aot-paths.md), [ADR-0007](docs/adr/ADR-0007-data-driven-curation-catalog.md)). |
 | **Advanced SQL + analytics** | Temporal tables, persisted computed columns, `ROWVERSION` concurrency, Kimball star schema, ClickHouse aggregating MVs. See [`docs/sql-showcase.md`](docs/sql-showcase.md). |
 | **Python** | *(Week 3+)* PySpark / analytics tooling where applicable per the grid. |
 | **DevOps literacy** | Operated via `nexus-cli`; deploy + migration gate automated; runbook with panic button. |
@@ -32,11 +32,14 @@ composition root:
 ```
 DataFlowStudio.Api  (composition root — the only project that references every module)
 ├── Modules/Commerce    OLTP write-side over OltpDb (source of truth)
-├── Modules/Ingestion   CDC → Kafka (Avro) worker — Native-AOT path (Dapper, no EF Core)
-├── Modules/Warehouse   StarRocks Kimball DWH loaders            (Week 3)
-├── Modules/Telemetry   ClickHouse pipeline telemetry writers     (Week 3)
+├── Modules/Ingestion   CDC curation: Debezium raw → curated Avro, data-driven catalog (no EF Core)
+├── Modules/Warehouse   StarRocks Kimball DWH loaders — SCD2 dimensions + facts
+├── Modules/Telemetry   ClickHouse pipeline telemetry writers     (Week 3d)
 └── SharedKernel        Result pattern · audit columns · IModule · IntegrationEvent
-DataFlowStudio.Migrations.Oltp   FluentMigrator migrations for OltpDb (up/down)
+DataFlowStudio.Migrations.Oltp        FluentMigrator migrations for OltpDb (up/down)
+DataFlowStudio.Migrations.Starrocks   DbUp — the dwh star + analytics serving
+DataFlowStudio.Migrations.Clickhouse  DbUp-pattern runner — the analytics telemetry schema
+DataFlowStudio.Seed / .Curation / .WarehouseSink / .Trace   runnable pipeline tools
 ```
 
 Modules never reference one another; cross-module communication is via `SharedKernel` integration
@@ -53,7 +56,7 @@ OltpDb (SQL Server AG)  ──CDC──►  Kafka topics (Avro, Schema Registry)
 
 .NET 10 / C# · ASP.NET Core minimal API · Dapper · FluentMigrator (OltpDb) + DbUp (StarRocks/ClickHouse) ·
 Apache Kafka + Avro + Schema Registry · StarRocks · ClickHouse · OpenTelemetry → Grafana LGTM ·
-OpenLineage → Marquez · xUnit + Testcontainers + NetArchTest · Native AOT (Kafka worker).
+OpenLineage → Marquez · xUnit + Testcontainers + NetArchTest.
 
 ## 6. Getting started
 
@@ -107,7 +110,7 @@ SQL Server; real Kafka/StarRocks/ClickHouse in later weeks). Coverage gate: 80% 
 ## 11. Observability
 
 OpenTelemetry traces/metrics/logs flow to the Grafana LGTM stack (Phase 0.I); data lineage is
-emitted via OpenLineage to Marquez (E16). Wired in Week 3.
+emitted via OpenLineage to Marquez (E16). Wired in Week 3e.
 
 ## 12. Operations
 
@@ -120,11 +123,23 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 |---|---|---|
 | 1 | Solution scaffold · OltpDb migrations · E1 gate · repo hygiene | ✅ done |
 | 2 | CDC → Kafka: OltpDb on the AG · Debezium raw · **.NET curation → Avro** · Schema Registry · `nexus-shared` consumed · [5-face demo](docs/demos/watch-the-pipeline.md) | ✅ done (live) |
-| 3 | StarRocks DWH + ClickHouse telemetry (DbUp) · OTel + Marquez | ⏳ |
+| 3a | Sink schema: **DbUp** for StarRocks `dwh` + ClickHouse `analytics` · apply→re-apply gates | ✅ done (live) |
+| 3b | Curation for **all 10 order-flow entities** (data-driven catalog) · seed tool | ✅ done (live) |
+| 3c | **StarRocks DWH sink** — SCD2 dimensions + facts | ✅ done (live) |
+| 3d–3f | ClickHouse telemetry (Kafka-engine) · Marquez + OTel · real Face 5 | ⏳ |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
 
-**Week 2 is live on the lab.** Run `.\scripts\dfs-trace.ps1` to watch one record travel all five
-faces (OLTP → CDC → Debezium → curated Avro → sink); see [docs/demos/watch-the-pipeline.md](docs/demos/watch-the-pipeline.md).
+**The pipeline runs end-to-end on the lab today** — OLTP → CDC → Debezium → curated Avro → the
+StarRocks Kimball star (SCD2 dimensions + facts). Replay it from zero with
+[docs/handbook.md](docs/handbook.md); watch it by hand with
+[docs/demos/watch-the-pipeline.md](docs/demos/watch-the-pipeline.md):
+
+```powershell
+.\scripts\dfs-seed.ps1            # a representative order-flow dataset into OltpDb
+.\scripts\dfs-curate.ps1          # raw CDC -> curated Avro (10 topics)
+.\scripts\dfs-warehouse-sink.ps1  # curated Avro -> StarRocks dwh (SCD2 + facts)
+.\scripts\dfs-trace.ps1           # follow one record across the five faces
+```
 
 ## 14. License
 

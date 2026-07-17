@@ -154,11 +154,51 @@ You'll see the subject, its schema id/version, and the Avro JSON — the contrac
 
 ---
 
-## Face 5 — the sink
+## Face 5 — the sink (StarRocks Kimball DWH)
 
-Week 2 stops at a projection printed by the trace tool. In **Week 3** this becomes an SCD2 dimension
-load in **StarRocks** (`dwh.dim_customer`) and a pipeline-telemetry row in **ClickHouse**
-(`analytics.pipeline_events`) — you'll query those in DataGrip / the ClickHouse client.
+The curated topics are the DWH's source. Two commands take you from an empty star to a queryable one
+(both idempotent — run them twice and nothing doubles):
+
+```powershell
+.\scripts\dfs-curate.ps1            # raw CDC -> curated Avro on all 10 dfs.*.changed.v1 topics
+.\scripts\dfs-warehouse-sink.ps1    # curated Avro -> StarRocks dwh (SCD2 dims + facts)
+```
+
+`dfs-curate` prints a per-entity count (59 on a fresh seed); `dfs-warehouse-sink` prints what it
+loaded. Now query the star — **DataGrip** (*New → MySQL*, host `192.168.70.31`, port `9030`, user
+`root`) or on the FE node:
+
+```bash
+# WHERE: sr-fe-leader (192.168.70.31) — the StarRocks MySQL wire is TLS-off, so --skip-ssl
+mysql -h127.0.0.1 -P9030 -uroot -p<starrocks-root> --skip-ssl -e "
+  SELECT customer_sk, customer_id, display_name, valid_from, valid_to, is_current
+  FROM dwh.dim_customer WHERE customer_code='SEED-C001';"
+```
+
+That's the **SCD2 dimension**: one row per version, `is_current=1` on the live one. Now the star —
+a fact joined to its dimensions:
+
+```sql
+SELECT c.display_name, p.display_name AS product, l.quantity, l.line_total_usd, d.full_date
+FROM dwh.fact_order_line l
+JOIN dwh.dim_customer c ON l.customer_sk = c.customer_sk AND c.is_current = 1
+JOIN dwh.dim_product  p ON l.product_sk  = p.product_sk  AND p.is_current = 1
+JOIN dwh.dim_date     d ON l.order_date_key = d.date_key
+ORDER BY l.order_line_id;
+```
+
+**Watch SCD2 actually version.** Change a seeded customer in SSMS, then re-run the two scripts:
+
+```sql
+UPDATE dbo.Customers SET DisplayName = 'Ada Lovelace (Countess)', modified_by = 'demo'
+WHERE CustomerCode = 'SEED-C001';
+```
+
+Re-query `dwh.dim_customer WHERE customer_code='SEED-C001'` — now **two** rows: the old version
+closed (`is_current=0`, `valid_to` stamped) and the new one current. That is the whole point of the
+pipeline: an OLTP edit became a *versioned* warehouse fact, with the history preserved.
+
+> ClickHouse pipeline telemetry (`analytics.pipeline_events`) lands in the Week-3D slice.
 
 ---
 
