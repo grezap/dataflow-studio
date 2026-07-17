@@ -8,6 +8,31 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # These families must move in lockstep — a partial bump breaks the build, so they
+    # are grouped into one PR each rather than updated package-by-package.
+    groups:
+      # Every Testcontainers package binds to the same core: a module built against a
+      # different core version throws MissingMethodException at run time (hit for real
+      # when Testcontainers.MsSql lagged the core at 4.1.0 vs 4.13.0).
+      testcontainers:
+        patterns:
+          - "Testcontainers*"
+      # dbup-mysql carries a hard dependency on dbup-core.
+      dbup:
+        patterns:
+          - "dbup-*"
+      # FluentMigrator.Runner must match FluentMigrator.
+      fluentmigrator:
+        patterns:
+          - "FluentMigrator*"
+      # The nexus-shared family is published and versioned together (E8).
+      nexus-shared:
+        patterns:
+          - "Nexus.*"
+      # xunit.runner.visualstudio tracks xunit.
+      xunit:
+        patterns:
+          - "xunit*"
 
   - package-ecosystem: github-actions
     directory: "/"
