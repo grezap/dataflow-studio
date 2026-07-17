@@ -3,10 +3,27 @@
   <PropertyGroup>
     <RootNamespace>DataFlowStudio.Modules.Warehouse</RootNamespace>
     <AssemblyName>DataFlowStudio.Modules.Warehouse</AssemblyName>
+    <!--
+      The Warehouse module loads the StarRocks Kimball DWH from the curated Avro topics: SCD2
+      dimensions + facts. Like the Ingestion curation worker it is non-AOT (Confluent + Avro serdes,
+      ADR-0003/0007) and uses no EF Core — StarRocks is driven over the MySQL wire via MySqlConnector.
+    -->
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Label="nexus-shared — consume curated Avro from Kafka (E8)">
+    <PackageReference Include="Nexus.Primitives" />
+    <PackageReference Include="Nexus.Kafka" />
+    <PackageReference Include="Nexus.Avro" />
+  </ItemGroup>
+
+  <ItemGroup Label="StarRocks over the MySQL wire + hosting/DI/logging">
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
   </ItemGroup>

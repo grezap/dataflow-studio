@@ -30,6 +30,15 @@
     <PackageVersion Include="FluentMigrator.Runner" Version="6.2.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Migrations — DbUp (SQL-script, forward-only) for the StarRocks + ClickHouse sinks (E1)">
+    <!-- dbup-mysql drives StarRocks (MySQL wire on :9030) via MySqlConnector, not Oracle MySql.Data. -->
+    <PackageVersion Include="dbup-core" Version="6.1.1" />
+    <PackageVersion Include="dbup-mysql" Version="6.1.0" />
+    <PackageVersion Include="MySqlConnector" Version="2.6.1" />
+    <!-- ClickHouse has no DbUp provider; a purpose-built DbUp-pattern runner talks to it over ADO. -->
+    <PackageVersion Include="ClickHouse.Client" Version="7.14.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Microsoft.Extensions hosting + DI + logging + config (net10)">
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
@@ -50,7 +59,12 @@
     <PackageVersion Include="FluentAssertions" Version="6.12.2" />
     <PackageVersion Include="coverlet.collector" Version="10.0.0" />
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.1.0" />
+    <!-- All Testcontainers packages must share one core version (a module built against a different
+         core throws MissingMethodException at runtime). Sink gates add a ClickHouse module + the base
+         package for the StarRocks allin1 image (no dedicated Testcontainers.StarRocks module). -->
+    <PackageVersion Include="Testcontainers" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.ClickHouse" Version="4.13.0" />
   </ItemGroup>
 
 </Project>

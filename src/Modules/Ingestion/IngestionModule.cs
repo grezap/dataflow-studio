@@ -1,3 +1,4 @@
+using DataFlowStudio.Modules.Ingestion.Curation;
 using DataFlowStudio.SharedKernel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -5,12 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DataFlowStudio.Modules.Ingestion;
 
 /// <summary>
-/// The Ingestion module is the CDC → Kafka pump. It reads change-data-capture rows from
-/// OltpDb (via Dapper) and publishes them as Avro records through the Schema Registry. It is
-/// deliberately generic: it operates on the SharedKernel <see cref="IntegrationEvent"/>
-/// abstraction and a mapper registry populated by the composition root, so it never
-/// references another module (enforced by the architecture tests). This is the E4 Native-AOT
-/// worker path — Dapper only, no EF Core.
+/// The Ingestion module is the CDC curation worker. It consumes Debezium's raw CDC topics and
+/// re-produces clean, schema-registered Avro on the curated topics, driven by the data-driven
+/// <see cref="Curation.CurationCatalog"/> (one spec per order-flow entity). It never references
+/// another module — the raw/curated contract is Kafka + Avro (enforced by the architecture tests).
+/// Non-AOT (ADR-0003/0007) but no EF Core.
 /// </summary>
 public sealed class IngestionModule : IModule
 {
@@ -20,8 +20,13 @@ public sealed class IngestionModule : IModule
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
-        // Register the long-running CDC pump as a hosted background service so the Api host owns
-        // its lifetime (started on boot, gracefully stopped on shutdown).
-        services.AddHostedService<CdcPublishWorker>();
+        // Only wire the live curation worker when the Kafka connection is configured (env / Vault),
+        // so the host still boots in environments where the pipeline isn't wired up.
+        if (CurationOptionsFactory.TryFromConfiguration(configuration, out var options))
+        {
+            services.AddSingleton(options);
+            services.AddSingleton<CurationEngine>();
+            services.AddHostedService<CurationWorker>();
+        }
     }
 }

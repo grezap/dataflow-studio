@@ -1,11 +1,16 @@
 asyncapi: 3.0.0
 info:
   title: DataFlow Studio — CDC Streams
-  version: 0.2.0
+  version: 0.3.0
   description: >
     Kafka topics in the DataFlow Studio pipeline (E14 / E16). SQL Server CDC on OltpDb is captured by
-    Debezium into raw JSON topics; the .NET curation worker reshapes those into clean domain events
-    serialized as Avro via the Schema Registry (ADR-0003, ADR-0004). This spec documents both hops.
+    Debezium into raw JSON topics; the .NET curation worker (Ingestion module) reshapes those into
+    clean domain events serialized as Avro via the Schema Registry (ADR-0003, ADR-0004, ADR-0007).
+    Week 3 covers all ten order-flow entities. The per-entity curated Avro schema is generated from
+    the curation catalog (one spec per entity) and registered under the `<topic>-value` subject —
+    that Schema Registry subject is the runtime source of truth; this spec documents the channels and
+    the shared envelope. Every raw topic is `oltp.OltpDb.dbo.<Table>`; every curated topic is
+    `dfs.<entity>.changed.v1`.
   license:
     name: MIT
     url: https://github.com/grezap/dataflow-studio/blob/main/LICENSE
@@ -32,10 +37,50 @@ channels:
     description: >
       Curated domain event for a customer change, produced by the .NET curation worker. Avro, schema
       registered under subject 'dfs.customers.changed.v1-value'. This is the contract downstream
-      consumers (StarRocks dwh, ClickHouse analytics) bind to.
+      consumers (StarRocks dwh, ClickHouse analytics) bind to. It is the fully-documented exemplar;
+      the nine channels below follow the same shape (business fields + the shared envelope).
     messages:
       customerChanged:
         $ref: '#/components/messages/CustomerChanged'
+  # The remaining order-flow curated channels. Each carries an entity-specific record plus the shared
+  # operation/sourceTsMs/curatedAtUtc envelope; the authoritative schema is the '<address>-value'
+  # Schema Registry subject, generated from the curation catalog.
+  curatedProductCategoryChanged:
+    address: dfs.product-categories.changed.v1
+    description: Curated product-category change (feeds dwh.dim_product category names).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedProductChanged:
+    address: dfs.products.changed.v1
+    description: Curated product change (feeds SCD2 dwh.dim_product).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedWarehouseChanged:
+    address: dfs.warehouses.changed.v1
+    description: Curated warehouse change (feeds dwh.dim_warehouse).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedCustomerAddressChanged:
+    address: dfs.customer-addresses.changed.v1
+    description: Curated address change (enriches fact_order billing/shipping).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedOrderChanged:
+    address: dfs.orders.changed.v1
+    description: Curated order change (feeds dwh.fact_order).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedOrderLineChanged:
+    address: dfs.order-lines.changed.v1
+    description: Curated order-line change (feeds dwh.fact_order_line).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedTransactionChanged:
+    address: dfs.transactions.changed.v1
+    description: Curated payment-transaction change (feeds dwh.fact_transaction).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedShipmentChanged:
+    address: dfs.shipments.changed.v1
+    description: Curated shipment change (feeds dwh.dim_carrier + shipment facts).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  curatedProductInventoryChanged:
+    address: dfs.product-inventory.changed.v1
+    description: Curated inventory change (feeds dwh.fact_inventory_snap).
+    messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
 operations:
   onRawCustomer:
     action: receive
@@ -83,8 +128,29 @@ components:
             - { name: customerCode, type: string }
             - { name: displayName, type: string }
             - { name: email, type: string }
+            - { name: preferredLocale, type: string }
             - { name: status, type: int }
             - { name: lifetimeValueUsd, type: string }
+            - { name: operation, type: string }
+            - { name: sourceTsMs, type: long }
+            - { name: curatedAtUtc, type: long }
+    CuratedOrderFlowChange:
+      name: CuratedOrderFlowChange
+      title: Curated order-flow change (Avro; per-entity schema)
+      contentType: application/avro
+      summary: >
+        The shape shared by every curated order-flow event: entity-specific business fields
+        (decimals as strings, timestamps as epoch-millis longs) followed by the common envelope —
+        operation (snapshot/insert/update/delete), sourceTsMs (long), curatedAtUtc (long). The exact
+        record for each entity is registered under its '<topic>-value' subject and generated from the
+        curation catalog; CustomerChanged above is the fully-expanded example.
+      payload:
+        schemaFormat: application/vnd.apache.avro;version=1.9.0
+        schema:
+          type: record
+          name: CuratedOrderFlowChange
+          namespace: com.nexusplatform.dataflowstudio.curated
+          fields:
             - { name: operation, type: string }
             - { name: sourceTsMs, type: long }
             - { name: curatedAtUtc, type: long }

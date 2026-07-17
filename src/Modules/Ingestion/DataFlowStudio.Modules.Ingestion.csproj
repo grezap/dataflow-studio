@@ -3,19 +3,26 @@
   <PropertyGroup>
     <RootNamespace>DataFlowStudio.Modules.Ingestion</RootNamespace>
     <AssemblyName>DataFlowStudio.Modules.Ingestion</AssemblyName>
-    <!-- E4: the Ingestion CDC->Kafka worker is a Native-AOT publish path. Dapper only; EF Core
-         is banned here and the ban is enforced by the architecture tests (NetArchTest). -->
-    <IsAotCompatible>true</IsAotCompatible>
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <!--
+      The Ingestion module is the CDC curation worker: it consumes Debezium's raw CDC topics and
+      re-produces clean, schema-registered Avro on the curated topics. Per ADR-0004, Debezium (not a
+      .NET AOT worker) owns log-based capture; per ADR-0003 the Avro serdes are reflection-based and
+      therefore NOT Native-AOT — so this module is deliberately non-AOT (ADR-0007). The E4 invariant
+      that survives is "no EF Core", still enforced by the architecture tests.
+    -->
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
   </ItemGroup>
 
-  <ItemGroup Label="AOT-safe deps only — Dapper for CDC reads; Nexus.Kafka/Nexus.Avro arrive Week 2">
-    <PackageReference Include="Dapper" />
-    <PackageReference Include="Microsoft.Data.SqlClient" />
+  <ItemGroup Label="nexus-shared — Kafka + Avro + Schema Registry building blocks (E8)">
+    <PackageReference Include="Nexus.Primitives" />
+    <PackageReference Include="Nexus.Kafka" />
+    <PackageReference Include="Nexus.Avro" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hosting + DI + config + logging (the worker is a hosted BackgroundService)">
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

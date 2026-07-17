@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/DataFlowStudio.Migrations.Oltp/DataFlowStudio.Migrations.Oltp.csproj" />
+    <ProjectReference Include="../../src/DataFlowStudio.Migrations.Starrocks/DataFlowStudio.Migrations.Starrocks.csproj" />
+    <ProjectReference Include="../../src/DataFlowStudio.Migrations.Clickhouse/DataFlowStudio.Migrations.Clickhouse.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,7 +20,11 @@
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.ClickHouse" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="ClickHouse.Client" />
     <PackageReference Include="Dapper" />
   </ItemGroup>
 

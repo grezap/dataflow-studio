@@ -6,6 +6,66 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 3 (Session 3C): StarRocks DWH sink (SCD2 dimensions + facts)
+
+- **Warehouse sink** (ADR-0006) — the Warehouse module consumes the curated Avro topics and loads the
+  Kimball star over the MySQL wire: **SCD2** `dim_customer`/`dim_product` (close-current + insert new
+  version by surrogate key; unchanged → no-op), SCD1 `dim_warehouse`/`dim_carrier`, generated
+  `dim_date`, and the four facts (`fact_order`/`fact_order_line`/`fact_transaction`/
+  `fact_inventory_snap`) with on-demand range-partition creation. Loads in dependency order; inserts
+  are batched (StarRocks penalises single-row inserts); `line_total_usd` is recomputed.
+- **Runnable sink** — `DataFlowStudio.WarehouseSink` (drain, `scripts/dfs-warehouse-sink.ps1`) +
+  the hosted `WarehouseSinkWorker` (timer), sharing one `WarehouseSinkEngine`.
+- **ADR-0006** (sink load strategy: StarRocks .NET worker now; ClickHouse-native in 3D) + Sql-literal
+  unit tests. At-least-once curated topics are deduped by natural key; every load path is idempotent.
+- **Live-proven on the lab** — loaded **59 curated records** into the star: dim_customer(8)/dim_product(6)
+  current, dim_warehouse(3), dim_carrier(2), dim_date(5), fact_order(4)/fact_order_line(6)/
+  fact_transaction(4)/fact_inventory_snap(18); a star join resolves SCD2 surrogate keys; a re-run adds
+  no versions/rows (idempotent). One fix surfaced live: `product-inventory` is keyed by product alone,
+  so the sink dedups it by its full (product, warehouse) grain.
+
+### Added — Week 3 (Session 3B): source replay — curated events for all order-flow entities
+
+- **Data-driven curation catalog** (ADR-0007) — one `EntityCurationSpec` per order-flow entity
+  (customers, product categories, products, warehouses, customer addresses, orders, order lines,
+  transactions, shipments, product inventory) mapping a Debezium raw topic → `dfs.<entity>.changed.v1`
+  + a generated curated Avro schema. Adding an entity is a list entry, not new worker code.
+- **Curation engine + worker** — the Ingestion module is now the real (non-AOT) CDC curation worker:
+  consume raw Debezium JSON → project (`CuratedRecordProjector`, pure + unit-tested) → produce curated
+  Avro through the Schema Registry. Runs continuously (`CurationWorker`) or in drain mode (the
+  runnable `DataFlowStudio.Curation` console, `scripts/dfs-curate.ps1`). Decimals carried as strings;
+  timestamps as epoch-millis longs.
+- **Seed tool** (`DataFlowStudio.Seed`, `scripts/dfs-seed.ps1`) — an idempotent, representative
+  OltpDb order-flow dataset (4 customers, 6 products, 3 warehouses, 4 orders + lines/transactions/
+  shipments/inventory) so the curated topics have real content.
+- **AsyncAPI 0.3.0** — all ten curated channels + the shared curated-change envelope.
+- **AOT resolution (ADR-0007)** — Debezium+curation (ADR-0004) + reflection-based Avro serdes
+  (ADR-0003) leave no Native-AOT .NET worker; the Ingestion module drops its AOT badge but keeps the
+  no-EF-Core invariant (still enforced by the architecture tests).
+- **Live-proven on the lab** — seeded OltpDb → Debezium captured all 10 tables (`time.precision.mode
+  =connect`) → the curator produced **59 curated records across all 10 topics**, all 10 Schema
+  Registry subjects registered. Two refinements surfaced live: curated Avro fields now carry
+  **defaults** so schema evolution is BACKWARD-compatible (adding `preferredLocale` made customers a
+  clean v2); and the computed `LineTotalUsd` column (stored NULL by SQL Server CDC) is **not carried**
+  — the DWH loader recomputes it. At-least-once delivery means curated topics can carry duplicates
+  (keyed by natural key), so the sink loaders (3C) must be idempotent/upsert.
+
+### Added — Week 3 (Session 3A): sink schema migrations (DbUp)
+
+- **`DataFlowStudio.Migrations.Starrocks`** — DbUp (`dbup-mysql` over MySqlConnector) reproducing the
+  `dwh` Kimball star (5 dimensions, 4 facts, `bridge_customer_seg`) + an `analytics` serving view,
+  with a StarRocks-compatible journal (`StarRocksTableJournal`) and a `$replicationNum$` variable
+  (3 for the lab, 1 for a single-backend container).
+- **`DataFlowStudio.Migrations.Clickhouse`** — a purpose-built, DbUp-pattern runner over
+  `ClickHouse.Client` reproducing the `analytics` telemetry schema (`pipeline_events` local +
+  Distributed, the `pipeline_latency_by_hour` AggregatingMergeTree MV, `cdc_lag_seconds`,
+  `error_events`), with lab-vs-single-node profiles (`Replicated*MergeTree` + `ON CLUSTER` vs plain).
+- **Idempotency gates (E1, forward-only)** — `apply → re-apply` on throwaway `starrocks/allin1` +
+  `clickhouse-server` containers; both green. The gates caught four defects in the authored DDL
+  (PK distribution key, colocation bucket count, key-column order, `nexus_ch` → `nexus_analytics`),
+  fixed in the scripts and mirrored back into `schemas/dataflow-studio/README.md`.
+- **ADR-0005** — DbUp migrations for the StarRocks + ClickHouse sinks (the split + the corrections).
+
 ### Added — Week 2: CDC → Kafka, live on the lab
 
 - **`OltpDb` on the SQL Server AG** — the schema (11 tables) applied by the FluentMigrator runner

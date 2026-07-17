@@ -53,10 +53,10 @@ public sealed class ArchitectureTests
         => AssertNoDependency(SharedKernel, CommerceNs, IngestionNs, WarehouseNs, TelemetryNs, ApiNs);
 
     [Fact]
-    public void Aot_paths_should_not_depend_on_ef_core()
+    public void Cdc_and_migration_paths_should_not_depend_on_ef_core()
     {
-        // E4 (ADR-0002): the Ingestion Kafka worker is Native-AOT and the migration tool uses
-        // FluentMigrator + raw SQL — neither may pull in EF Core.
+        // E4: the CDC curation worker (Ingestion — non-AOT since ADR-0007, but still Dapper/no-EF)
+        // and the migration tool (FluentMigrator + raw SQL) must never pull in EF Core.
         AssertNoDependency(Ingestion, EntityFrameworkCoreNs);
         AssertNoDependency(MigrationsOltp, EntityFrameworkCoreNs);
     }

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DataFlowStudio.Seed</RootNamespace>
+    <AssemblyName>DataFlowStudio.Seed</AssemblyName>
+    <!-- Deploy/demo tool: seeds a representative order-flow dataset into OltpDb so the pipeline has
+         data to flow. Idempotent (a marker row short-circuits a re-run). Not a library. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\seed-oltp.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+</Project>
