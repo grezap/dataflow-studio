@@ -40,7 +40,7 @@ DataFlowStudio.Migrations.Oltp        FluentMigrator migrations for OltpDb (up/d
 DataFlowStudio.Migrations.Starrocks   DbUp — the dwh star + analytics serving
 DataFlowStudio.Migrations.Clickhouse  DbUp-pattern runner — analytics telemetry + Kafka ingestion
 DataFlowStudio.Clickhouse             shared private-CA TLS connection factory
-DataFlowStudio.Seed / .Curation / .WarehouseSink / .Trace   runnable pipeline tools
+DataFlowStudio.Seed / .Curation / .WarehouseSink / .Trace / .Telemetry   runnable pipeline tools
 ```
 
 Modules never reference one another; cross-module communication is via `SharedKernel` integration
@@ -80,9 +80,12 @@ dotnet run --project src/DataFlowStudio.Api
 ## 7. Project structure
 
 ```
-src/    DataFlowStudio.Api · SharedKernel · Migrations.Oltp · Modules/{Commerce,Ingestion,Warehouse,Telemetry}
-tests/  Architecture.Tests (NetArchTest) · Migrations.Tests (E1 gate) · UnitTests
-docs/   adr/ · sql-showcase.md · api/{openapi,asyncapi}.yaml
+src/     Api · SharedKernel · Clickhouse · Migrations.{Oltp,Starrocks,Clickhouse}
+         Modules/{Commerce,Ingestion,Warehouse,Telemetry}
+         Seed · Curation · WarehouseSink · Trace · Telemetry   (runnable consoles)
+tests/   Architecture.Tests (NetArchTest) · Migrations.Tests (E1 gates) · UnitTests
+docs/    handbook.md (from-zero replay) · adr/ · demos/ · sql-showcase.md · api/{openapi,asyncapi}.yaml
+scripts/ dfs-seed · dfs-curate · dfs-warehouse-sink · dfs-trace · dfs-telemetry
 ```
 
 ## 8. Database & migrations
@@ -135,8 +138,9 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 | 3e–3f | Marquez (OpenLineage) + observability tier · real Face 5 | ⏳ |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
 
-**The pipeline runs end-to-end on the lab today** — OLTP → CDC → Debezium → curated Avro → the
-StarRocks Kimball star (SCD2 dimensions + facts). Replay it from zero with
+**The pipeline runs end-to-end on the lab today — and observes itself** — OLTP → CDC → Debezium →
+curated Avro → the StarRocks Kimball star (SCD2 dimensions + facts), with per-stage latency, CDC lag
+and errors landing in ClickHouse via native Kafka-engine ingestion. Replay it from zero with
 [docs/handbook.md](docs/handbook.md); watch it by hand with
 [docs/demos/watch-the-pipeline.md](docs/demos/watch-the-pipeline.md):
 
@@ -145,6 +149,7 @@ StarRocks Kimball star (SCD2 dimensions + facts). Replay it from zero with
 .\scripts\dfs-curate.ps1          # raw CDC -> curated Avro (10 topics)
 .\scripts\dfs-warehouse-sink.ps1  # curated Avro -> StarRocks dwh (SCD2 + facts)
 .\scripts\dfs-trace.ps1           # follow one record across the five faces
+.\scripts\dfs-telemetry.ps1       # read back the pipeline's own telemetry from ClickHouse
 ```
 
 ## 14. License
