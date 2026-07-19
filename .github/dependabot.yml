@@ -1,7 +1,22 @@
 version: 2
+
+# The Nexus.* family (nexus-shared, E8) is published to a PRIVATE GitHub Packages feed, which
+# nuget.config adds as the `github-nexus` source. Dependabot resolves dependencies with its own
+# credentials, so without this block it 401s on that feed and every NuGet update job fails with
+# `private_source_authentication_failure` — while `ci` stays green, which makes it easy to miss.
+# The token is a Dependabot-scoped secret (a separate store from Actions secrets) holding a classic
+# PAT with `read:packages`.
+registries:
+  github-nexus:
+    type: nuget-feed
+    url: https://nuget.pkg.github.com/grezap/index.json
+    token: ${{secrets.DEPENDABOT_PACKAGES_TOKEN}}
+
 updates:
   - package-ecosystem: nuget
     directory: "/"
+    registries:
+      - github-nexus
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
