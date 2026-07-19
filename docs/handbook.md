@@ -268,7 +268,35 @@ Expected: dims 8/6/3/2, `dim_date` 5, facts 4/6/4/18, and four orders with custo
 ### 1.8a Verify the telemetry (ClickHouse, native ingestion)
 
 Both engines instrument themselves, so §1.6 and §1.7 already produced telemetry to `dfs.telemetry.*`
-and ClickHouse ingested it through the Kafka-engine tables. Give it a few seconds to poll, then:
+and ClickHouse ingested it through the Kafka-engine tables. One command reads it all back:
+
+```powershell
+.\scripts\dfs-telemetry.ps1            # verify (default)
+.\scripts\dfs-telemetry.ps1 all        # prove both error paths, then verify
+```
+
+`verify` prints five sections: the Kafka-engine ingestion objects (3 readers + 3 materialized views),
+`pipeline_events` grouped by pipeline and stage, the `cdc_lag_seconds` spread, the
+`pipeline_latency_by_hour` p50/p95/p99, and recent `error_events`.
+
+`all` first emits **one error down each path** — native (produced to `dfs.telemetry.error_events`,
+ingested by ClickHouse's own Kafka engine) and the .NET **HTTPS control path** (`ClickHouseErrorSink`,
+the fallback used when the broker is unreachable) — then polls until both land, so each path is
+proven rather than assumed. Expect:
+
+```
+  native  -> dfs.telemetry.error_events   (trace native-proof-HHmmss)
+  https   -> analytics.error_events        (trace https-proof-HHmmss)
+  ✅ both paths landed — native ingestion and the HTTPS control path are both live.
+```
+
+If only the native one is missing, the HTTPS row still inserts (it is synchronous), which localises
+the fault to the ClickHouse-as-Kafka-client setup — see §3.2 T20–T22 and Guide 23 §9.1.
+
+<details>
+<summary>The same checks as raw SQL, if you prefer to drive them by hand</summary>
+
+Give ClickHouse a few seconds to poll, then: 
 
 ```sql
 -- on any CH data node:  clickhouse-client --secure --accept-invalid-certificate
@@ -298,8 +326,8 @@ row per curated record, plus a `drain` run-summary) and `warehouse-sink` (one ro
 freshly-issued source changes read a few tens of seconds, while records still sitting on the raw
 topics from an earlier session read their true age (days). Lag measures the *event*, not the run.
 
-To see both error paths, inject one of each — natively through Kafka, and through the .NET
-control path (`ClickHouseErrorSink`, used when the broker is unreachable):
+To inject a native error event by hand (this is what `dfs-telemetry.ps1 demo-errors` automates for
+the native path — the HTTPS path has no shell equivalent, since it runs inside the Telemetry module):
 
 ```bash
 echo '{"event_ms":'"$(( $(date +%s) * 1000 ))"',"trace_id":"native-proof","service":"curation",
@@ -307,6 +335,8 @@ echo '{"event_ms":'"$(( $(date +%s) * 1000 ))"',"trace_id":"native-proof","servi
 sudo /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server 192.168.10.21:9092 \
   --producer.config /etc/nexus-kafka/client-ssl.properties --topic dfs.telemetry.error_events
 ```
+
+</details>
 
 ### 1.9 Tear down
 

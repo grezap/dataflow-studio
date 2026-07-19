@@ -71,13 +71,14 @@ flowchart LR
 
     classDef built fill:#1f6f43,stroke:#0d3,color:#fff;
     classDef planned fill:#555,stroke:#999,color:#fff,stroke-dasharray:4 3;
-    class API,ING,COM,SQL built;
-    class WH,TEL,STAR,CH,KAFKA,SR_REG,OBS planned;
+    class API,ING,COM,SQL,WH,TEL,STAR,CH,KAFKA,SR_REG built;
+    class OBS planned;
 ```
 
-> **Legend — build status (Week 1 of 4):** green = built & tested now; grey-dashed = wired in
-> Weeks 2–3. The *spine* (Api, Commerce, Ingestion skeleton, OltpDb migrations) is real and green;
-> the Kafka/StarRocks/ClickHouse legs are filled in the coming slices.
+> **Legend — build status (end of Week 3d):** green = built, tested and **live on the lab**;
+> grey-dashed = still to come. The whole data path is green — OltpDb → CDC/Debezium → Kafka+Schema
+> Registry → the StarRocks Kimball star, and ClickHouse ingesting the pipeline's own telemetry
+> natively. Only the observability/lineage leg (Grafana LGTM + Marquez, Week 3e) remains.
 
 ---
 
@@ -92,10 +93,10 @@ fails the build if any other edge appears.
 flowchart TD
     API[DataFlowStudio.Api<br/><i>composition root</i>]
     COM[Modules.Commerce]
-    ING[Modules.Ingestion<br/><i>Native-AOT · no EF Core</i>]
+    ING[Modules.Ingestion<br/><i>non-AOT (ADR-0007) · no EF Core</i>]
     WH[Modules.Warehouse]
     TEL[Modules.Telemetry]
-    SK[SharedKernel<br/><i>Result · AuditColumns · IModule · IntegrationEvent</i>]
+    SK[SharedKernel<br/><i>Result · AuditColumns · IModule<br/>IntegrationEvent · telemetry contracts</i>]
     MIG[Migrations.Oltp<br/><i>FluentMigrator · deploy-time tool</i>]
 
     API --> COM
@@ -158,7 +159,7 @@ sequenceDiagram
     autonumber
     participant App as Commerce (OLTP write)
     participant SQL as SQL Server OltpDb
-    participant CDC as Ingestion worker (AOT)
+    participant CDC as Ingestion worker (curation)
     participant SR as Schema Registry
     participant K as Kafka (Avro)
     participant WH as Warehouse loader
@@ -266,7 +267,7 @@ src/
     Ingestion                   CDC curation: raw Debezium → curated Avro (non-AOT, no EF)
     Warehouse                   StarRocks Kimball loaders (SCD2 dims + facts)
     Telemetry                   Kafka JSON telemetry sink + ClickHouse HTTPS error sink
-  DataFlowStudio.{Seed,Curation,WarehouseSink,Trace}   runnable consoles (drain / demo)
+  DataFlowStudio.{Seed,Curation,WarehouseSink,Trace,Telemetry}   runnable consoles (drain / demo / verify)
 tests/
   DataFlowStudio.Architecture.Tests  NetArchTest boundary + no-EF rules
   DataFlowStudio.Migrations.Tests    E1 gates (OltpDb up→down→up; sink idempotency) + profiles

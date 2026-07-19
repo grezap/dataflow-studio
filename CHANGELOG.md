@@ -6,6 +6,16 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — replay completeness (full-replay documentation standard)
+
+- **`DataFlowStudio.Telemetry` console + `scripts/dfs-telemetry.ps1`** — reads the pipeline's own
+  telemetry back out of ClickHouse (Kafka-engine objects, `pipeline_events`, `cdc_lag_seconds`, the
+  p50/p95/p99 latency MV, `error_events`), and its `demo-errors` mode emits one error down **each**
+  path — native Kafka→Kafka-engine and the .NET HTTPS control path — then waits for both to land.
+  This replaces a throwaway harness used once during 3D: a proof only the author can run is a
+  documentation gap, so it is now committed, runnable code.
+- Handbook §1.8a rewritten around the script (the raw SQL is kept, folded into a details block).
+
 ### Changed — assertion library: FluentAssertions → Shouldly
 
 - **Migrated the whole test suite to [Shouldly](https://github.com/shouldly/shouldly) (MIT)**

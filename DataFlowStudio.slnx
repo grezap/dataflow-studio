@@ -10,6 +10,7 @@
     <Project Path="src/DataFlowStudio.Curation/DataFlowStudio.Curation.csproj" />
     <Project Path="src/DataFlowStudio.Seed/DataFlowStudio.Seed.csproj" />
     <Project Path="src/DataFlowStudio.WarehouseSink/DataFlowStudio.WarehouseSink.csproj" />
+    <Project Path="src/DataFlowStudio.Telemetry/DataFlowStudio.Telemetry.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
     <Project Path="src/Modules/Commerce/DataFlowStudio.Modules.Commerce.csproj" />
