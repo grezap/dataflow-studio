@@ -1,7 +1,7 @@
 using Dapper;
 using DataFlowStudio.Migrations.Oltp;
-using FluentAssertions;
 using Microsoft.Data.SqlClient;
+using Shouldly;
 using Testcontainers.MsSql;
 using Xunit;
 
@@ -79,13 +79,13 @@ public sealed class OltpMigrationUpDownUpTests : IAsyncLifetime
     public async Task Up_down_up_leaves_the_full_oltp_schema_present()
     {
         OltpMigrationRunner.MigrateUp(_connectionString);
-        (await CountPresentAsync()).Should().Be(AllExpected.Count, "every table exists after the first up");
+        (await CountPresentAsync()).ShouldBe(AllExpected.Count, "every table exists after the first up");
 
         OltpMigrationRunner.MigrateDownToZero(_connectionString);
-        (await CountPresentAsync()).Should().Be(0, "down() reverses every migration, dropping the whole schema");
+        (await CountPresentAsync()).ShouldBe(0, "down() reverses every migration, dropping the whole schema");
 
         OltpMigrationRunner.MigrateUp(_connectionString);
-        (await CountPresentAsync()).Should().Be(AllExpected.Count, "E1 gate: up succeeds again after a full rollback");
+        (await CountPresentAsync()).ShouldBe(AllExpected.Count, "E1 gate: up succeeds again after a full rollback");
     }
 
     private async Task<int> CountPresentAsync()

@@ -1,5 +1,5 @@
-using FluentAssertions;
 using Nexus.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.UnitTests;
@@ -11,9 +11,9 @@ public sealed class ResultTests
     {
         var result = Result.Success();
 
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Error.Should().Be(Error.None);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Error.ShouldBe(Error.None);
     }
 
     [Fact]
@@ -23,8 +23,8 @@ public sealed class ResultTests
 
         Result result = error; // implicit conversion
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Should().Be(error);
+        result.IsFailure.ShouldBeTrue();
+        result.Error.ShouldBe(error);
     }
 
     [Fact]
@@ -32,8 +32,8 @@ public sealed class ResultTests
     {
         Result<int> result = 42; // implicit conversion
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Should().Be(42);
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.ShouldBe(42);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class ResultTests
 
         var act = () => result.Value;
 
-        act.Should().Throw<InvalidOperationException>();
+        Should.Throw<InvalidOperationException>(() => act());
     }
 
     [Theory]
@@ -59,6 +59,6 @@ public sealed class ResultTests
             _ => Error.Conflict("x"),
         };
 
-        error.Code.Should().Be(expectedCode);
+        error.Code.ShouldBe(expectedCode);
     }
 }

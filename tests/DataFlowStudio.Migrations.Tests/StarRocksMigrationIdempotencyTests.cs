@@ -1,8 +1,8 @@
 using DataFlowStudio.Migrations.Starrocks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using FluentAssertions;
 using MySqlConnector;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.Migrations.Tests;
@@ -75,13 +75,13 @@ public sealed class StarRocksMigrationIdempotencyTests : IAsyncLifetime
         int replicationNum = _container is null ? 3 : ContainerReplicationNum;
 
         var first = StarRocksMigrationRunner.MigrateUp(_connectionString, replicationNum);
-        first.Successful.Should().BeTrue(first.Error?.ToString());
-        CountPresent().Should().Be(StarRocksTables.All.Count, "every dwh table exists after the first apply");
+        first.Successful.ShouldBeTrue(first.Error?.ToString());
+        CountPresent().ShouldBe(StarRocksTables.All.Count, "every dwh table exists after the first apply");
 
         var second = StarRocksMigrationRunner.MigrateUp(_connectionString, replicationNum);
-        second.Successful.Should().BeTrue(second.Error?.ToString());
-        second.Scripts.Should().BeEmpty("re-applying a fully-migrated schema is a no-op");
-        CountPresent().Should().Be(StarRocksTables.All.Count, "the schema is unchanged after the second apply");
+        second.Successful.ShouldBeTrue(second.Error?.ToString());
+        second.Scripts.ShouldBeEmpty("re-applying a fully-migrated schema is a no-op");
+        CountPresent().ShouldBe(StarRocksTables.All.Count, "the schema is unchanged after the second apply");
     }
 
     private int CountPresent()

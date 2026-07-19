@@ -1,7 +1,7 @@
 using System.Text.Json;
 using DataFlowStudio.Modules.Telemetry;
 using DataFlowStudio.SharedKernel.Telemetry;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.UnitTests;
@@ -23,12 +23,13 @@ public sealed class TelemetryTests
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
-        PropertyNames(root).Should().BeEquivalentTo(
-            "event_ms", "trace_id", "pipeline", "stage", "status", "duration_ms", "payload");
-        root.GetProperty("event_ms").GetInt64().Should().Be(1_737_000_000_123);
-        root.GetProperty("pipeline").GetString().Should().Be("curation");
-        root.GetProperty("stage").GetString().Should().Be("dim_customer");
-        root.GetProperty("duration_ms").GetUInt32().Should().Be(42);
+        PropertyNames(root).ShouldBe(
+            ["event_ms", "trace_id", "pipeline", "stage", "status", "duration_ms", "payload"],
+            ignoreOrder: true);
+        root.GetProperty("event_ms").GetInt64().ShouldBe(1_737_000_000_123);
+        root.GetProperty("pipeline").GetString().ShouldBe("curation");
+        root.GetProperty("stage").GetString().ShouldBe("dim_customer");
+        root.GetProperty("duration_ms").GetUInt32().ShouldBe(42u);
     }
 
     [Fact]
@@ -39,10 +40,10 @@ public sealed class TelemetryTests
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
-        PropertyNames(root).Should().BeEquivalentTo("event_ms", "source", "topic", "lag_seconds");
-        root.GetProperty("event_ms").GetInt64().Should().Be(1_737_000_000_123);
-        root.GetProperty("source").GetString().Should().Be("oltp");
-        root.GetProperty("lag_seconds").GetDouble().Should().Be(1.5);
+        PropertyNames(root).ShouldBe(["event_ms", "source", "topic", "lag_seconds"], ignoreOrder: true);
+        root.GetProperty("event_ms").GetInt64().ShouldBe(1_737_000_000_123);
+        root.GetProperty("source").GetString().ShouldBe("oltp");
+        root.GetProperty("lag_seconds").GetDouble().ShouldBe(1.5);
     }
 
     [Fact]
@@ -53,10 +54,11 @@ public sealed class TelemetryTests
 
         using var doc = JsonDocument.Parse(json);   // parses ⇒ the message was validly escaped
         var root = doc.RootElement;
-        PropertyNames(root).Should().BeEquivalentTo(
-            "event_ms", "trace_id", "service", "error_code", "message", "stack");
-        root.GetProperty("error_code").GetString().Should().Be("projection-failed");
-        root.GetProperty("message").GetString().Should().Be("bad 'quote'\nand newline");
+        PropertyNames(root).ShouldBe(
+            ["event_ms", "trace_id", "service", "error_code", "message", "stack"],
+            ignoreOrder: true);
+        root.GetProperty("error_code").GetString().ShouldBe("projection-failed");
+        root.GetProperty("message").GetString().ShouldBe("bad 'quote'\nand newline");
     }
 
     [Fact]

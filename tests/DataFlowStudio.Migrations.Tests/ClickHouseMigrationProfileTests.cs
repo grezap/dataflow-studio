@@ -1,5 +1,5 @@
 using DataFlowStudio.Migrations.Clickhouse;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.Migrations.Tests;
@@ -17,11 +17,11 @@ public sealed class ClickHouseMigrationProfileTests
     {
         var lab = ClickHouseMigrationProfile.Lab();
 
-        lab.ExcludedScripts.Should().BeEmpty("the replicated lab runs the native Kafka-engine ingestion");
-        lab.Variables.Should().ContainKey("kafka_brokers");
-        lab.Variables.Should().ContainKey("kafka_group_pipeline_events");
-        lab.Variables.Should().ContainKey("kafka_group_cdc_lag");
-        lab.Variables.Should().ContainKey("kafka_group_error_events");
+        lab.ExcludedScripts.ShouldBeEmpty("the replicated lab runs the native Kafka-engine ingestion");
+        lab.Variables.ShouldContainKey("kafka_brokers");
+        lab.Variables.ShouldContainKey("kafka_group_pipeline_events");
+        lab.Variables.ShouldContainKey("kafka_group_cdc_lag");
+        lab.Variables.ShouldContainKey("kafka_group_error_events");
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class ClickHouseMigrationProfileTests
     {
         var single = ClickHouseMigrationProfile.SingleNode();
 
-        single.ExcludedScripts.Should().Contain(
+        single.ExcludedScripts.ShouldContain(
             "Script0005_kafka_ingestion.sql",
             "a lone CI container has no Kafka broker to consume from");
     }
