@@ -20,4 +20,8 @@
     <PackageReference Include="ClickHouse.Client" />
   </ItemGroup>
 
+  <ItemGroup Label="The TLS-aware connection factory now lives in the shared CH lib (ADR-0008)">
+    <ProjectReference Include="../DataFlowStudio.Clickhouse/DataFlowStudio.Clickhouse.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -6,6 +6,40 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Week 3 (Session 3D): ClickHouse telemetry sink (native Kafka-engine ingestion)
+
+- **The pipeline observes itself** (ADR-0008) — the curation engine emits a stage event per curated
+  record plus an end-to-end **CDC-lag** sample (`now − source-commit time`), and the warehouse sink
+  emits one event per loader stage (`dim_*`, `fact_*`). Failures emit structured error events.
+- **Native ingestion** — workers produce JSON to `dfs.telemetry.{pipeline_events,cdc_lag,error_events}`
+  and **ClickHouse ingests it itself** through Kafka-engine source tables + materialized views
+  (`Script0005`); no .NET consumer sits on that path. Timestamps cross as epoch-ms `event_ms` and the
+  MVs convert with `fromUnixTimestamp64Milli`, avoiding datetime-string parsing on the broker path.
+- **Telemetry seam in the SharedKernel** — `IPipelineTelemetrySink` + `PipelineStageEvent` /
+  `CdcLagSample` / `PipelineError` (pure contracts) let the Ingestion and Warehouse engines emit
+  without referencing the Telemetry module; `NullPipelineTelemetrySink` keeps unwired runs clean.
+- **Dual, non-duplicating error paths** — errors flow natively like everything else; when the broker
+  is unreachable (so the error is often *about* Kafka) `ClickHouseErrorSink` inserts straight over
+  ClickHouse HTTPS.
+- **New `DataFlowStudio.Clickhouse` library** — the private-CA TLS connection factory moved out of the
+  migrations tool so the Telemetry module can share it, without leaking `ClickHouse.Client` into the
+  AOT-friendly SharedKernel.
+- **Topology-aware migrations** — `ClickHouseMigrationProfile.ExcludedScripts`; the single-node
+  profile skips the Kafka-engine script (a CI container has no broker), so the E1 gate stays green.
+- **ClickHouse as a Kafka client** — a dedicated `kafka-clickhouse-client` PKI role issues
+  `CN=clickhouse-telemetry`; the data nodes carry the PEMs plus a `<kafka>` config block, and the
+  principal holds `READ`/`DESCRIBE` on topic-prefix `dfs.telemetry` and `READ` on group-prefix
+  `dfs-clickhouse`. TLS never appears in DDL.
+- **E16 scaffolding** — an OpenTelemetry counter per emit; OTLP export wires up only when
+  `DFS_OTLP_ENDPOINT` is set (the observability tier lands in 3E).
+- **Live-proven on the lab** — one curate + one sink produced **88 `pipeline_events`** across both
+  pipelines, **77 `cdc_lag_seconds`** samples (min ~55 s for freshly-issued source changes; historical
+  records correctly report their true age), and `error_events` via **both** paths. The
+  `pipeline_latency_by_hour` `AggregatingMergeTree` MV returns real p50/p95/p99 per stage, and
+  re-running the migration applies 0 scripts.
+- **Retired a 3C workaround** — the DWH sink now has its own `dfs-warehouse-sink` group ACL instead of
+  borrowing the `dfs-curation` prefix.
+
 ### Added — Week 3 (Session 3C): StarRocks DWH sink (SCD2 dimensions + facts)
 
 - **Warehouse sink** (ADR-0006) — the Warehouse module consumes the curated Avro topics and loads the

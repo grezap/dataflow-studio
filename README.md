@@ -34,11 +34,12 @@ DataFlowStudio.Api  (composition root — the only project that references every
 ├── Modules/Commerce    OLTP write-side over OltpDb (source of truth)
 ├── Modules/Ingestion   CDC curation: Debezium raw → curated Avro, data-driven catalog (no EF Core)
 ├── Modules/Warehouse   StarRocks Kimball DWH loaders — SCD2 dimensions + facts
-├── Modules/Telemetry   ClickHouse pipeline telemetry writers     (Week 3d)
-└── SharedKernel        Result pattern · audit columns · IModule · IntegrationEvent
+├── Modules/Telemetry   Pipeline self-observation → dfs.telemetry.* (ClickHouse ingests natively)
+└── SharedKernel        Result · audit columns · IModule · IntegrationEvent · telemetry contracts
 DataFlowStudio.Migrations.Oltp        FluentMigrator migrations for OltpDb (up/down)
 DataFlowStudio.Migrations.Starrocks   DbUp — the dwh star + analytics serving
-DataFlowStudio.Migrations.Clickhouse  DbUp-pattern runner — the analytics telemetry schema
+DataFlowStudio.Migrations.Clickhouse  DbUp-pattern runner — analytics telemetry + Kafka ingestion
+DataFlowStudio.Clickhouse             shared private-CA TLS connection factory
 DataFlowStudio.Seed / .Curation / .WarehouseSink / .Trace   runnable pipeline tools
 ```
 
@@ -126,7 +127,8 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 | 3a | Sink schema: **DbUp** for StarRocks `dwh` + ClickHouse `analytics` · apply→re-apply gates | ✅ done (live) |
 | 3b | Curation for **all 10 order-flow entities** (data-driven catalog) · seed tool | ✅ done (live) |
 | 3c | **StarRocks DWH sink** — SCD2 dimensions + facts | ✅ done (live) |
-| 3d–3f | ClickHouse telemetry (Kafka-engine) · Marquez + OTel · real Face 5 | ⏳ |
+| 3d | **ClickHouse telemetry sink** — native Kafka-engine ingestion · CDC lag · latency percentiles | ✅ done (live) |
+| 3e–3f | Marquez (OpenLineage) + observability tier · real Face 5 | ⏳ |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
 
 **The pipeline runs end-to-end on the lab today** — OLTP → CDC → Debezium → curated Avro → the

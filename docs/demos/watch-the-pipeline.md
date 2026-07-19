@@ -1,12 +1,15 @@
 # Watch the DataFlow Studio pipeline by hand
 
-Follow one customer record across all five faces using everyday tools — SSMS for SQL,
-`ssh` + the Kafka console tools for the stream, `curl` for Debezium. Every endpoint, port, and
-credential is listed so you can reproduce each hop yourself.
+Follow one customer record across every face of the pipeline using everyday tools — SSMS for SQL,
+`ssh` + the Kafka console tools for the stream, `curl` for Debezium, `clickhouse-client` for the
+telemetry. Every endpoint, port, and credential is listed so you can reproduce each hop yourself.
+
+Faces 1–5 are the **data** path (OLTP write → CDC → raw Debezium → curated Avro → the StarRocks
+star). Face 6 is the **observability** path: the pipeline reporting on itself.
 
 > **Prereqs:** SQL AG + `kafka-east` + `schema-registry` + `kafka-connect` powered on, the Debezium
-> `oltp-cdc` connector running, Vault unsealed. The one-command version of this whole flow is
-> `.\scripts\dfs-trace.ps1`.
+> `oltp-cdc` connector running, Vault unsealed. Face 5 additionally needs StarRocks; Face 6 needs
+> ClickHouse. The one-command version of the Faces 1–5 flow is `.\scripts\dfs-trace.ps1`.
 
 ---
 
@@ -198,7 +201,64 @@ Re-query `dwh.dim_customer WHERE customer_code='SEED-C001'` — now **two** rows
 closed (`is_current=0`, `valid_to` stamped) and the new one current. That is the whole point of the
 pipeline: an OLTP edit became a *versioned* warehouse fact, with the history preserved.
 
-> ClickHouse pipeline telemetry (`analytics.pipeline_events`) lands in the Week-3D slice.
+---
+
+## Face 6 — the pipeline watching itself (ClickHouse)
+
+Everything above was the *data* path. While it ran, both engines were also reporting on themselves —
+and ClickHouse pulled that telemetry out of Kafka **on its own**, with no .NET consumer involved
+(ADR-0008). Connect to any ClickHouse data node:
+
+```bash
+ssh -i ~/.ssh/nexus_gateway_ed25519 nexusadmin@192.168.70.44
+clickhouse-client --host localhost --secure --accept-invalid-certificate
+```
+
+**How long did each stage take?**
+
+```sql
+SELECT pipeline, stage, count() AS n, round(avg(duration_ms),1) AS avg_ms
+FROM analytics.pipeline_events
+GROUP BY pipeline, stage ORDER BY pipeline, stage;
+```
+
+You'll see two pipelines: `curation` (one row per curated record, plus a `drain` run-summary) and
+`warehouse-sink` (one row per loader stage — `dim_customer`, `fact_order`, …).
+
+**How fresh is the data?** Every curated record carries a lag sample — `now` minus the moment SQL
+Server committed the change:
+
+```sql
+SELECT source, count() AS n, round(min(lag_seconds),1) AS min_lag, round(max(lag_seconds),1) AS max_lag
+FROM analytics.cdc_lag_seconds GROUP BY source;
+```
+
+Expect a wide spread, and that's correct: an edit you just made in Face 1 reads a few tens of
+seconds, while records replayed from an older session honestly report their real age. Lag describes
+the *event*, not the run.
+
+**Percentiles, cheaply.** `pipeline_latency_by_hour` stores partial aggregate *states*, finalized at
+read time with the `-Merge` combinators:
+
+```sql
+SELECT stage, countMerge(events_state) AS events,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[1],1) AS p50,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[2],1) AS p95,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[3],1) AS p99
+FROM cluster('nexus_analytics', analytics.pipeline_latency_by_hour)
+GROUP BY stage ORDER BY events DESC;
+```
+
+**Where did it come from?** Nothing in .NET wrote these rows. The workers produced JSON to
+`dfs.telemetry.*`, and ClickHouse's own Kafka-engine tables consumed it:
+
+```sql
+SELECT name, engine FROM system.tables
+WHERE database = 'analytics' AND (name LIKE '%_kafka' OR name LIKE '%_kafka_mv');
+```
+
+Six objects: three `Kafka` readers and three `MaterializedView` triggers that reshape each row into
+its destination table. That is the engine doing the ETL.
 
 ---
 

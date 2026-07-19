@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
+    <!-- The telemetry sink instruments the curation drain (ADR-0008). -->
+    <ProjectReference Include="../Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup Label="Host plumbing — config from env + console logging">

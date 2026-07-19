@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: DataFlow Studio — CDC Streams
-  version: 0.3.0
+  version: 0.4.0
   description: >
     Kafka topics in the DataFlow Studio pipeline (E14 / E16). SQL Server CDC on OltpDb is captured by
     Debezium into raw JSON topics; the .NET curation worker (Ingestion module) reshapes those into
@@ -11,6 +11,11 @@ info:
     that Schema Registry subject is the runtime source of truth; this spec documents the channels and
     the shared envelope. Every raw topic is `oltp.OltpDb.dbo.<Table>`; every curated topic is
     `dfs.<entity>.changed.v1`.
+
+    The `dfs.telemetry.*` channels carry the pipeline's own self-observation (ADR-0008). They are
+    deliberately **JSON, not Avro**: ClickHouse Kafka-engine source tables consume them natively as
+    `JSONEachRow`, so their property names mirror the ClickHouse columns one-for-one and no Schema
+    Registry lookup sits on that path.
   license:
     name: MIT
     url: https://github.com/grezap/dataflow-studio/blob/main/LICENSE
@@ -81,6 +86,38 @@ channels:
     address: dfs.product-inventory.changed.v1
     description: Curated inventory change (feeds dwh.fact_inventory_snap).
     messages: { change: { $ref: '#/components/messages/CuratedOrderFlowChange' } }
+  # ---------------------------------------------------------------------------------------------
+  # Pipeline self-observation (ADR-0008). Unlike the curated domain events these are JSON, not Avro:
+  # ClickHouse Kafka-engine source tables consume them directly as JSONEachRow, so the property names
+  # must match the ClickHouse columns exactly. Timestamps cross as epoch milliseconds (event_ms) and
+  # each materialized view converts with fromUnixTimestamp64Milli — no datetime-string parsing.
+  # ---------------------------------------------------------------------------------------------
+  telemetryPipelineEvents:
+    address: dfs.telemetry.pipeline_events
+    description: >
+      Per-stage pipeline latency, produced by the curation and warehouse-sink engines. Ingested
+      natively into analytics.pipeline_events_local and rolled up by the pipeline_latency_by_hour
+      AggregatingMergeTree MV (p50/p95/p99).
+    messages:
+      pipelineEvent:
+        $ref: '#/components/messages/TelemetryPipelineEvent'
+  telemetryCdcLag:
+    address: dfs.telemetry.cdc_lag
+    description: >
+      End-to-end CDC freshness samples (now − Debezium source-commit time), emitted per curated
+      record. Ingested natively into analytics.cdc_lag_seconds.
+    messages:
+      cdcLag:
+        $ref: '#/components/messages/TelemetryCdcLag'
+  telemetryErrorEvents:
+    address: dfs.telemetry.error_events
+    description: >
+      Structured pipeline failures. Ingested natively into analytics.error_events. Errors that occur
+      when the broker itself is unreachable bypass this channel and are inserted directly over
+      ClickHouse HTTPS (the control/fallback path — ADR-0008), so an error takes exactly one path.
+    messages:
+      errorEvent:
+        $ref: '#/components/messages/TelemetryErrorEvent'
 operations:
   onRawCustomer:
     action: receive
@@ -92,6 +129,23 @@ operations:
     channel:
       $ref: '#/channels/curatedCustomerChanged'
     summary: The curation worker publishes the curated CustomerChanged event.
+  publishPipelineTelemetry:
+    action: send
+    channel:
+      $ref: '#/channels/telemetryPipelineEvents'
+    summary: The curation + warehouse-sink engines publish per-stage latency events.
+  publishCdcLag:
+    action: send
+    channel:
+      $ref: '#/channels/telemetryCdcLag'
+    summary: The curation engine publishes an end-to-end CDC-lag sample per curated record.
+  ingestTelemetryIntoClickHouse:
+    action: receive
+    channel:
+      $ref: '#/channels/telemetryPipelineEvents'
+    summary: >
+      ClickHouse consumes natively via a Kafka-engine table (principal CN=clickhouse-telemetry,
+      consumer group dfs-clickhouse-pipeline-events) — no .NET consumer on this path.
 components:
   messages:
     DebeziumCustomerEnvelope:
@@ -154,3 +208,51 @@ components:
             - { name: operation, type: string }
             - { name: sourceTsMs, type: long }
             - { name: curatedAtUtc, type: long }
+    TelemetryPipelineEvent:
+      name: TelemetryPipelineEvent
+      title: Pipeline stage event (telemetry)
+      contentType: application/json
+      summary: >
+        One completed pipeline stage. Property names match the analytics.pipeline_events_kafka
+        columns exactly (JSONEachRow); the MV converts event_ms to DateTime64(3).
+      payload:
+        type: object
+        required: [event_ms, trace_id, pipeline, stage, status, duration_ms, payload]
+        properties:
+          event_ms: { type: integer, description: Epoch milliseconds when the stage completed. }
+          trace_id: { type: string, description: Correlation id for the run. }
+          pipeline: { type: string, description: 'curation | warehouse-sink' }
+          stage: { type: string, description: 'Entity or loader stage, e.g. customers, dim_customer, fact_order, drain.' }
+          status: { type: string, description: 'ok | error' }
+          duration_ms: { type: integer, description: Wall-clock stage duration. }
+          payload: { type: string, description: Small JSON blob with stage-specific detail (counts, keys). }
+    TelemetryCdcLag:
+      name: TelemetryCdcLag
+      title: CDC lag sample (telemetry)
+      contentType: application/json
+      summary: >
+        Freshness sample. Property names match analytics.cdc_lag_seconds_kafka.
+      payload:
+        type: object
+        required: [event_ms, source, topic, lag_seconds]
+        properties:
+          event_ms: { type: integer, description: Epoch milliseconds when the sample was taken. }
+          source: { type: string, description: 'Logical source, e.g. oltp.' }
+          topic: { type: string, description: The raw CDC topic the change arrived on. }
+          lag_seconds: { type: number, description: Seconds between source commit and processing. }
+    TelemetryErrorEvent:
+      name: TelemetryErrorEvent
+      title: Pipeline error (telemetry)
+      contentType: application/json
+      summary: >
+        Structured failure. Property names match analytics.error_events_kafka.
+      payload:
+        type: object
+        required: [event_ms, trace_id, service, error_code, message, stack]
+        properties:
+          event_ms: { type: integer, description: Epoch milliseconds when the error occurred. }
+          trace_id: { type: string }
+          service: { type: string, description: 'Emitting stage, e.g. curation, warehouse-sink.' }
+          error_code: { type: string, description: 'Stable classification, e.g. projection-failed.' }
+          message: { type: string }
+          stack: { type: string }

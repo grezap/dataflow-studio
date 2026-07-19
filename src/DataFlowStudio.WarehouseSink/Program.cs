@@ -1,3 +1,4 @@
+using DataFlowStudio.Modules.Telemetry;
 using DataFlowStudio.Modules.Warehouse.Sink;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -27,8 +28,6 @@ options = options with { ConsumerGroup = options.ConsumerGroup + "-" + Guid.NewG
 using var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Information));
 
-var engine = new WarehouseSinkEngine(options, loggerFactory.CreateLogger<WarehouseSinkEngine>());
-
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -36,7 +35,17 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
+// Telemetry (ADR-0008): a live Kafka sink when DFS_KAFKA_* is set, else a no-op. The sink engine emits
+// a per-loader-stage latency event through it as it loads the star.
+var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFactory, cts.Token).ConfigureAwait(false);
+var engine = new WarehouseSinkEngine(options, loggerFactory.CreateLogger<WarehouseSinkEngine>(), telemetry);
+
 var counts = await engine.RunAsync(cts.Token).ConfigureAwait(false);
+
+if (telemetry is IAsyncDisposable telemetryDisposable)
+{
+    await telemetryDisposable.DisposeAsync().ConfigureAwait(false);
+}
 
 Console.WriteLine();
 Console.WriteLine("Curated records consumed + loaded per entity:");

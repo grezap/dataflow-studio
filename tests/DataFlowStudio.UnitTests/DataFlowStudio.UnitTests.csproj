@@ -11,6 +11,7 @@
     <ProjectReference Include="../../src/DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
     <ProjectReference Include="../../src/Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
     <ProjectReference Include="../../src/Modules/Warehouse/DataFlowStudio.Modules.Warehouse.csproj" />
+    <ProjectReference Include="../../src/Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup>

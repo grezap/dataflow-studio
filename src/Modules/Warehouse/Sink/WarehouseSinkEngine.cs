@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Avro.Generic;
 using Confluent.Kafka;
 using Confluent.Kafka.SyncOverAsync;
+using DataFlowStudio.SharedKernel.Telemetry;
 using Microsoft.Extensions.Logging;
 using Nexus.Avro;
 using Nexus.Kafka;
@@ -13,10 +15,19 @@ namespace DataFlowStudio.Modules.Warehouse.Sink;
 /// order — dimensions before facts, categories before products, orders before order lines — so every
 /// surrogate-key lookup is available when a fact needs it. Runs in drain mode (load the current
 /// snapshot, then stop) for the runnable sink + the live load; the hosted worker calls it on a timer.
+/// <para>
+/// Each loader stage is timed and emitted as a <c>warehouse-sink</c> pipeline event through the
+/// injected <see cref="IPipelineTelemetrySink"/> (a no-op when unwired); a failing stage emits a
+/// structured error before rethrowing (ADR-0008).
+/// </para>
 /// </summary>
-public sealed partial class WarehouseSinkEngine(WarehouseSinkOptions options, ILogger<WarehouseSinkEngine> logger)
+public sealed partial class WarehouseSinkEngine(
+    WarehouseSinkOptions options,
+    ILogger<WarehouseSinkEngine> logger,
+    IPipelineTelemetrySink telemetry)
 {
     private const string Prefix = "dfs.";
+    private const string PipelineName = "warehouse-sink";
 
     private static readonly string[] Topics =
     [
@@ -41,6 +52,30 @@ public sealed partial class WarehouseSinkEngine(WarehouseSinkOptions options, IL
         var dim = new DimensionLoader(client);
         var fact = new FactLoader(client);
         var batchUtc = DateTime.UtcNow;
+        var traceId = Guid.NewGuid().ToString("N");
+        var runStopwatch = Stopwatch.StartNew();
+
+        // Times one loader stage, emits a warehouse-sink pipeline event, and re-raises (as an error
+        // event) any failure so a bad load is both observable and still fatal to the run.
+        async Task Stage(string stage, Func<Task> load)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                await load().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                telemetry.RecordError(new PipelineError(
+                    DateTimeOffset.UtcNow, traceId, PipelineName, $"{stage}-load-failed", ex.Message, ex.StackTrace ?? string.Empty));
+                await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+
+            stopwatch.Stop();
+            telemetry.RecordStage(new PipelineStageEvent(
+                DateTimeOffset.UtcNow, traceId, PipelineName, stage, "ok", (uint)stopwatch.ElapsedMilliseconds, "{}"));
+        }
 
         IReadOnlyCollection<GenericRecord> Records(string topic) => byTopic[topic].Values;
 
@@ -61,9 +96,9 @@ public sealed partial class WarehouseSinkEngine(WarehouseSinkOptions options, IL
 
         dateKeys.Add((batchUtc.Year * 10000) + (batchUtc.Month * 100) + batchUtc.Day);
 
-        await dim.LoadDatesAsync(dateKeys).ConfigureAwait(false);
-        await dim.LoadWarehousesAsync(Records("dfs.warehouses.changed.v1")).ConfigureAwait(false);
-        await dim.LoadCarriersAsync(Records("dfs.shipments.changed.v1")).ConfigureAwait(false);
+        await Stage("dim_date", () => dim.LoadDatesAsync(dateKeys)).ConfigureAwait(false);
+        await Stage("dim_warehouse", () => dim.LoadWarehousesAsync(Records("dfs.warehouses.changed.v1"))).ConfigureAwait(false);
+        await Stage("dim_carrier", () => dim.LoadCarriersAsync(Records("dfs.shipments.changed.v1"))).ConfigureAwait(false);
 
         var categoryNames = new Dictionary<int, string>();
         foreach (var c in Records("dfs.product-categories.changed.v1"))
@@ -71,8 +106,8 @@ public sealed partial class WarehouseSinkEngine(WarehouseSinkOptions options, IL
             categoryNames[Rec.Int(c, "categoryId")] = Rec.Str(c, "name");
         }
 
-        await dim.LoadCustomersAsync(Records("dfs.customers.changed.v1"), batchUtc).ConfigureAwait(false);
-        await dim.LoadProductsAsync(Records("dfs.products.changed.v1"), categoryNames, batchUtc).ConfigureAwait(false);
+        await Stage("dim_customer", () => dim.LoadCustomersAsync(Records("dfs.customers.changed.v1"), batchUtc)).ConfigureAwait(false);
+        await Stage("dim_product", () => dim.LoadProductsAsync(Records("dfs.products.changed.v1"), categoryNames, batchUtc)).ConfigureAwait(false);
 
         // Surrogate-key lookups now that the dimensions are loaded.
         var lookups = new SinkLookups(
@@ -82,13 +117,21 @@ public sealed partial class WarehouseSinkEngine(WarehouseSinkOptions options, IL
             orders.ToDictionary(o => Rec.Long(o, "orderId"), o => Sql.DateKey(Rec.Long(o, "placedAtUtc"))),
             orders.ToDictionary(o => Rec.Long(o, "orderId"), o => Rec.Long(o, "customerId")));
 
-        await fact.LoadOrdersAsync(orders, lookups).ConfigureAwait(false);
-        await fact.LoadOrderLinesAsync(Records("dfs.order-lines.changed.v1"), lookups).ConfigureAwait(false);
-        await fact.LoadTransactionsAsync(transactions).ConfigureAwait(false);
-        await fact.LoadInventoryAsync(Records("dfs.product-inventory.changed.v1"), lookups, batchUtc).ConfigureAwait(false);
+        await Stage("fact_order", () => fact.LoadOrdersAsync(orders, lookups)).ConfigureAwait(false);
+        await Stage("fact_order_line", () => fact.LoadOrderLinesAsync(Records("dfs.order-lines.changed.v1"), lookups)).ConfigureAwait(false);
+        await Stage("fact_transaction", () => fact.LoadTransactionsAsync(transactions)).ConfigureAwait(false);
+        await Stage("fact_inventory_snap", () => fact.LoadInventoryAsync(Records("dfs.product-inventory.changed.v1"), lookups, batchUtc)).ConfigureAwait(false);
 
         var counts = byTopic.ToDictionary(kv => Entity(kv.Key), kv => kv.Value.Count, StringComparer.Ordinal);
         int total = counts.Values.Sum();
+        runStopwatch.Stop();
+
+        // A run-summary stage event (the whole load's latency + total records), then flush telemetry.
+        telemetry.RecordStage(new PipelineStageEvent(
+            DateTimeOffset.UtcNow, traceId, PipelineName, "load", "ok",
+            (uint)runStopwatch.ElapsedMilliseconds, $"{{\"records\":{total}}}"));
+        await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
         LogLoaded(logger, total);
         return counts;
     }
