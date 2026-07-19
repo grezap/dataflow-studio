@@ -26,8 +26,8 @@
   </ItemGroup>
 
   <ItemGroup Label="Migrations — FluentMigrator for OltpDb (E1: up -> down -> up gate)">
-    <PackageVersion Include="FluentMigrator" Version="6.2.0" />
-    <PackageVersion Include="FluentMigrator.Runner" Version="6.2.0" />
+    <PackageVersion Include="FluentMigrator" Version="8.0.1" />
+    <PackageVersion Include="FluentMigrator.Runner" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup Label="Migrations — DbUp (SQL-script, forward-only) for the StarRocks + ClickHouse sinks (E1)">
