@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/DataFlowStudio.Api/DataFlowStudio.Api.csproj" />
     <Project Path="src/DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <Project Path="src/DataFlowStudio.Clickhouse/DataFlowStudio.Clickhouse.csproj" />
     <Project Path="src/DataFlowStudio.Migrations.Oltp/DataFlowStudio.Migrations.Oltp.csproj" />
     <Project Path="src/DataFlowStudio.Migrations.Starrocks/DataFlowStudio.Migrations.Starrocks.csproj" />
     <Project Path="src/DataFlowStudio.Migrations.Clickhouse/DataFlowStudio.Migrations.Clickhouse.csproj" />

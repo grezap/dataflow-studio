@@ -3,12 +3,30 @@
   <PropertyGroup>
     <RootNamespace>DataFlowStudio.Modules.Telemetry</RootNamespace>
     <AssemblyName>DataFlowStudio.Modules.Telemetry</AssemblyName>
+    <!--
+      The Telemetry module makes the pipeline observe itself: it produces per-stage / CDC-lag / error
+      telemetry to Kafka (dfs.telemetry.*, JSON) for ClickHouse's native Kafka-engine ingestion, and
+      inserts errors directly over ClickHouse HTTPS as a control/fallback path (ADR-0008). It consumes
+      Confluent.Kafka (via Nexus.Kafka) so, like the other pipeline modules, it is non-AOT; no EF Core.
+    -->
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <ProjectReference Include="../../DataFlowStudio.Clickhouse/DataFlowStudio.Clickhouse.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Label="nexus-shared — Kafka mTLS producer + OTel bootstrap (E8/E16)">
+    <PackageReference Include="Nexus.Primitives" />
+    <PackageReference Include="Nexus.Kafka" />
+    <PackageReference Include="Nexus.Observability" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hosting + DI + config + logging">
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

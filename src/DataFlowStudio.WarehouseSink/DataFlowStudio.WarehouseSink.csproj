@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Modules/Warehouse/DataFlowStudio.Modules.Warehouse.csproj" />
+    <!-- The telemetry sink instruments the DWH load (ADR-0008). -->
+    <ProjectReference Include="../Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup Label="Host plumbing — config from env + console logging">

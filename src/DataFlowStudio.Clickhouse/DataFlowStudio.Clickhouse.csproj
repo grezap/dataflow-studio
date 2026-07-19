@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>DataFlowStudio.Clickhouse</RootNamespace>
+    <AssemblyName>DataFlowStudio.Clickhouse</AssemblyName>
+    <!--
+      A tiny shared library that owns one concern: opening a ClickHouse connection that trusts the
+      lab's private Vault-PKI root (and optionally presents a client cert). It is referenced by both
+      the migrations tool (DataFlowStudio.Migrations.Clickhouse) and the Telemetry module's error sink,
+      so the TLS-trust logic lives in exactly one place. Kept out of SharedKernel deliberately —
+      SharedKernel stays a pure, AOT-friendly contracts assembly with no ClickHouse.Client dependency
+      leaking transitively into every module (ADR-0008).
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClickHouse.Client" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,4 @@
+using DataFlowStudio.Clickhouse;
 using DataFlowStudio.Migrations.Clickhouse;
 
 // Deploy-time migration tool for the ClickHouse analytics telemetry schema (wired into

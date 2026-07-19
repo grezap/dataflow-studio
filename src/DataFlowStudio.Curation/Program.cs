@@ -1,4 +1,5 @@
 using DataFlowStudio.Modules.Ingestion.Curation;
+using DataFlowStudio.Modules.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -25,8 +26,6 @@ options = options with { ConsumerGroup = "dfs-curation-drain-" + Guid.NewGuid().
 using var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Information));
 
-var engine = new CurationEngine(options, loggerFactory.CreateLogger<CurationEngine>());
-
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -34,7 +33,17 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
+// Telemetry (ADR-0008): a live Kafka sink when DFS_KAFKA_* is set (same env as curation), else a no-op.
+// The curation engine emits per-record stage latency + CDC lag through it as it drains.
+var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFactory, cts.Token).ConfigureAwait(false);
+var engine = new CurationEngine(options, loggerFactory.CreateLogger<CurationEngine>(), telemetry);
+
 var counts = await engine.RunAsync(drainMode: true, cts.Token).ConfigureAwait(false);
+
+if (telemetry is IAsyncDisposable telemetryDisposable)
+{
+    await telemetryDisposable.DisposeAsync().ConfigureAwait(false);
+}
 
 Console.WriteLine();
 Console.WriteLine("Curated records per entity:");

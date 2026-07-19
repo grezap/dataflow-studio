@@ -59,6 +59,14 @@ public static partial class ClickHouseMigrationRunner
 
             foreach (var script in DiscoverScripts())
             {
+                if (profile.ExcludedScripts.Contains(script.Name))
+                {
+                    // Not applicable to this topology (e.g. Kafka-engine ingestion on a broker-less
+                    // single-node container) — never applied, never journalled.
+                    log.WriteLine($"  - skip {script.Name} (not applicable to this topology)");
+                    continue;
+                }
+
                 if (alreadyApplied.Contains(script.Name))
                 {
                     log.WriteLine($"  - skip {script.Name} (already applied)");

@@ -3,9 +3,10 @@
 Advanced SQL techniques exercised by this project (MASTER-PLAN §2 + E28). The portfolio-wide
 catalog in `portfolio-index/docs/sql-depth.md` cross-references these.
 
-> **Acceptance-gate status:** ≥3 documented artifacts required (MASTER-PLAN §6) — **met: 9.**
+> **Acceptance-gate status:** ≥3 documented artifacts required (MASTER-PLAN §6) — **met: 10.**
 > §1–§4 are the Week-1/2 OltpDb + CDC surface; §5–§8 are live against the loaded StarRocks star
-> (Week 3); §9's ClickHouse MV is migrated and fills with the Week-3D telemetry sink.
+> (Week 3); §9–§10 are live against the ClickHouse telemetry schema, filled by the 3D native
+> Kafka-engine ingestion path.
 
 ## 1. System-versioned temporal tables
 
@@ -160,12 +161,56 @@ MV writes `quantilesState`/`countState` on ingest, and readers finalize with the
 That is what makes hourly percentiles cheap over a high-volume stream:
 
 ```sql
-SELECT pipeline, stage, hour,
-       quantilesMerge(0.5, 0.95, 0.99)(p_state) AS p50_p95_p99,
-       countMerge(events_state)                 AS events
-FROM analytics.pipeline_latency_by_hour
-GROUP BY pipeline, stage, hour
-ORDER BY hour DESC;
+-- The MV has no Distributed wrapper, so read it across the shards with cluster().
+SELECT stage,
+       countMerge(events_state)                             AS events,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[1], 1)  AS p50,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[2], 1)  AS p95,
+       round(quantilesMerge(0.5,0.95,0.99)(p_state)[3], 1)  AS p99
+FROM cluster('nexus_analytics', analytics.pipeline_latency_by_hour)
+GROUP BY stage
+ORDER BY events DESC;
 ```
 
-The table + MV are migrated (ADR-0005); the telemetry that fills them lands with the Week-3D sink.
+**Live** (3D, after one curate + one warehouse-sink run — abridged):
+
+```
+stage               events   p50      p95      p99
+product-inventory       18     16.0    146.7    675.7
+customers               16     18.5    242.8    753.3
+products                12     15.5    469.4    883.5
+orders                   8     16.0    609.1    859.4
+order-lines              6     25.0    522.0    650.8
+drain                    1  30211.0  30211.0  30211.0
+```
+
+Every row arrived **without a .NET consumer**: the workers produce JSON to `dfs.telemetry.*` and
+ClickHouse's own Kafka-engine tables + materialized views ingest it (ADR-0008). The `drain` stage is
+the whole-run summary, which is why its percentiles collapse to a single value.
+
+## 10. Native Kafka ingestion — engine-side ETL (ClickHouse)
+
+The telemetry path does its transform *inside* ClickHouse. A `Kafka`-engine table is a pure reader;
+a materialized view is the trigger that reshapes each row into its destination table:
+
+```sql
+CREATE TABLE analytics.pipeline_events_kafka ON CLUSTER nexus_analytics (
+    event_ms Int64, trace_id String, pipeline String, stage String,
+    status String, duration_ms UInt32, payload String
+) ENGINE = Kafka SETTINGS
+    kafka_broker_list = '192.168.10.21:9092,192.168.10.22:9092,192.168.10.23:9092',
+    kafka_topic_list  = 'dfs.telemetry.pipeline_events',
+    kafka_group_name  = 'dfs-clickhouse-pipeline-events',
+    kafka_format      = 'JSONEachRow',
+    kafka_num_consumers = 1;
+
+CREATE MATERIALIZED VIEW analytics.pipeline_events_kafka_mv ON CLUSTER nexus_analytics
+TO analytics.pipeline_events_local AS
+SELECT fromUnixTimestamp64Milli(event_ms) AS event_time,      -- epoch-ms → DateTime64(3)
+       trace_id, pipeline, stage, status, duration_ms, payload
+FROM analytics.pipeline_events_kafka;
+```
+
+Two details worth stealing: timestamps cross the wire as **integers** and are converted in the MV
+(no locale-sensitive datetime parsing on the broker path), and the mTLS material lives in the
+server's `<kafka>` config — never in the DDL.

@@ -2,7 +2,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using ClickHouse.Client.ADO;
 
-namespace DataFlowStudio.Migrations.Clickhouse;
+namespace DataFlowStudio.Clickhouse;
 
 /// <summary>
 /// Creates ClickHouse connections for the lab, whose HTTPS interface presents a certificate signed

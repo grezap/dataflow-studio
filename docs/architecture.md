@@ -38,9 +38,9 @@ flowchart LR
 
     subgraph dfs[DataFlow Studio — one deployable]
         API[Api host<br/>composition root]
-        ING[Ingestion module<br/>CDC → Kafka · AOT]
+        ING[Ingestion module<br/>CDC → curated Avro]
         WH[Warehouse module<br/>StarRocks loaders]
-        TEL[Telemetry module<br/>ClickHouse writers]
+        TEL[Telemetry module<br/>JSON → dfs.telemetry.*]
         COM[Commerce module<br/>OLTP write-side]
     end
 
@@ -137,7 +137,15 @@ flowchart TD
 | **Commerce** | OLTP write-side over `OltpDb` (source of truth) | SQL Server (Dapper) | domain types real; write-side Week 2 |
 | **Ingestion** | CDC curation: raw Debezium → curated Avro, data-driven catalog (non-AOT, no EF) | Kafka (raw + curated), Schema Registry | all 10 order-flow entities (3B; ADR-0007) |
 | **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts) | Kafka (consume curated), StarRocks (MySQL wire) | loaded (3C; ADR-0006) |
-| **Telemetry** | Pipeline telemetry (lag/latency/errors) | ClickHouse | schema migrated (3A); writers Week 3 (3D) |
+| **Telemetry** | Pipeline self-observation: stage latency, CDC lag, errors | Kafka (produce `dfs.telemetry.*`), ClickHouse (HTTPS control path) | live (3D; ADR-0008) |
+
+> **The telemetry seam.** The Ingestion and Warehouse engines emit through
+> `IPipelineTelemetrySink` — a SharedKernel contract — so neither references the Telemetry module and
+> module isolation holds. The concrete sink produces JSON to Kafka, and **ClickHouse ingests it
+> natively** via Kafka-engine tables + materialized views; no .NET consumer sits on that path. A
+> second, non-duplicating path inserts errors straight over ClickHouse HTTPS when the broker is
+> unreachable. The shared `DataFlowStudio.Clickhouse` library owns the private-CA TLS connection
+> factory used by both the Telemetry module and the migrations tool (ADR-0008).
 
 ---
 
@@ -197,9 +205,10 @@ flowchart LR
     SQL[SQL Server OltpDb] -->|"if down: no new CDC<br/>(existing Kafka data still serves)"| ING[Ingestion]
     ING -->|"if down: CDC lag grows,<br/>no data loss (resumes from offset)"| K[Kafka]
     K -->|"if down: pipeline stalls,<br/>OLTP + analytics reads unaffected"| WH[Warehouse]
-    K --> TEL[Telemetry]
     WH -->|"if down: dashboards go stale,<br/>Kafka retains backlog"| STAR[StarRocks]
-    TEL -->|"if down: lose observability,<br/>data pipeline unaffected"| CH[ClickHouse]
+    ING -->|"emit stage latency · CDC lag · errors"| TEL[dfs.telemetry.* topics]
+    WH --> TEL
+    TEL -->|"ClickHouse pulls natively via Kafka engine;<br/>if down: lose observability only"| CH[ClickHouse]
 ```
 
 | If this degrades… | Immediate effect | Protected by |
@@ -208,7 +217,7 @@ flowchart LR
 | **Ingestion worker** | CDC lag grows; **no data loss** | Kafka consumer offsets — it resumes exactly where it stopped |
 | **Kafka** | Whole pipeline pauses; OLTP writes and existing analytics reads **unaffected** | Kafka is HA (RF=3, mTLS); it's a buffer, not a coupler |
 | **Warehouse loader / StarRocks** | Dashboards go stale; **Kafka retains the backlog** | Replay from Kafka once recovered |
-| **Telemetry / ClickHouse** | Lose pipeline observability; **data flow unaffected** | Telemetry is a side-channel, never on the data path |
+| **Telemetry / ClickHouse** | Lose pipeline observability; **data flow unaffected** | Telemetry is a side-channel, never on the data path. Emission is fire-and-forget and every record call is exception-guarded, so a broker or ClickHouse outage cannot stall curation or the DWH load; ClickHouse resumes from its consumer-group offset when it returns |
 
 The load-bearing idea: **Kafka is a shock absorber.** Nothing upstream blocks on anything
 downstream. That is why CDC + a log broker, rather than a direct SQL→warehouse ETL, is the design.
@@ -247,16 +256,21 @@ flowchart LR
 src/
   DataFlowStudio.Api            composition root (minimal API, OpenAPI, health/modules)
   DataFlowStudio.SharedKernel   Result · Error · AuditColumns · IModule · IntegrationEvent
-  DataFlowStudio.Migrations.Oltp FluentMigrator migrations (11 tables) + runner + CLI
+                                Telemetry/  IPipelineTelemetrySink + telemetry records (pure contracts)
+  DataFlowStudio.Clickhouse     shared private-CA TLS connection factory (migrations + Telemetry)
+  DataFlowStudio.Migrations.Oltp        FluentMigrator migrations (11 tables) + runner + CLI
+  DataFlowStudio.Migrations.Starrocks   DbUp (MySQL wire) — dwh star
+  DataFlowStudio.Migrations.Clickhouse  DbUp-pattern runner — analytics telemetry + Kafka ingestion
   Modules/
     Commerce                    OLTP write-side domain + CDC contracts
-    Ingestion                   CDC → Kafka (Avro) worker — Native-AOT, Dapper only
-    Warehouse                   StarRocks Kimball loaders  (Week 3)
-    Telemetry                   ClickHouse telemetry writers (Week 3)
+    Ingestion                   CDC curation: raw Debezium → curated Avro (non-AOT, no EF)
+    Warehouse                   StarRocks Kimball loaders (SCD2 dims + facts)
+    Telemetry                   Kafka JSON telemetry sink + ClickHouse HTTPS error sink
+  DataFlowStudio.{Seed,Curation,WarehouseSink,Trace}   runnable consoles (drain / demo)
 tests/
   DataFlowStudio.Architecture.Tests  NetArchTest boundary + no-EF rules
-  DataFlowStudio.Migrations.Tests    E1 up → down → up gate
-  DataFlowStudio.UnitTests           SharedKernel primitives
+  DataFlowStudio.Migrations.Tests    E1 gates (OltpDb up→down→up; sink idempotency) + profiles
+  DataFlowStudio.UnitTests           SharedKernel primitives · curation · sink SQL · telemetry wire
 docs/
   architecture.md   this file            adr/   decision records
   sql-showcase.md   advanced SQL         api/   openapi.yaml + asyncapi.yaml

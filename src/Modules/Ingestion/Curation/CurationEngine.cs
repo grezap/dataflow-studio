@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Avro.Generic;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using DataFlowStudio.SharedKernel.Telemetry;
 using Microsoft.Extensions.Logging;
 using Nexus.Avro;
 using Nexus.Kafka;
@@ -14,9 +16,20 @@ namespace DataFlowStudio.Modules.Ingestion.Curation;
 /// re-produces it to the entity's <c>dfs.&lt;entity&gt;.changed.v1</c> topic through the Schema
 /// Registry. It runs either continuously (the hosted worker) or in drain mode (read the current
 /// snapshot to idle, then stop — used by the runnable curator and the live source-replay).
+/// <para>
+/// It instruments itself (ADR-0008): each curated record emits a <c>curation</c> stage event (its
+/// project+produce latency) and a CDC-lag sample (<c>now − source-commit-time</c>); skipped records
+/// emit a structured error. Telemetry flows through the injected <see cref="IPipelineTelemetrySink"/>
+/// (a no-op when the pipeline isn't wired), so instrumentation never disrupts curation.
+/// </para>
 /// </summary>
-public sealed partial class CurationEngine(CurationOptions options, ILogger<CurationEngine> logger)
+public sealed partial class CurationEngine(
+    CurationOptions options,
+    ILogger<CurationEngine> logger,
+    IPipelineTelemetrySink telemetry)
 {
+    private const string PipelineName = "curation";
+
     /// <summary>
     /// Ensures the curated topics exist, then curates raw changes until cancelled (or, in drain mode,
     /// until no raw record arrives for <see cref="CurationOptions.DrainIdleTimeout"/>). Returns the
@@ -48,6 +61,8 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
         consumer.Subscribe(CurationCatalog.RawTopics);
 
         LogStarted(logger, options.ConsumerGroup, drainMode);
+        var traceId = Guid.NewGuid().ToString("N");
+        var runStopwatch = Stopwatch.StartNew();
         var lastMessageUtc = DateTime.UtcNow;
 
         try
@@ -76,7 +91,7 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
                 }
 
                 lastMessageUtc = DateTime.UtcNow;
-                if (await TryCurateAsync(producer, result, counts, cancellationToken).ConfigureAwait(false))
+                if (await TryCurateAsync(producer, result, counts, traceId, cancellationToken).ConfigureAwait(false))
                 {
                     // curated; counter already advanced
                 }
@@ -89,6 +104,16 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
         }
 
         int total = counts.Values.Sum();
+        runStopwatch.Stop();
+
+        // A run-summary stage event (the whole drain's latency + per-entity counts) …
+        telemetry.RecordStage(new PipelineStageEvent(
+            DateTimeOffset.UtcNow, traceId, PipelineName, "drain", "ok",
+            (uint)runStopwatch.ElapsedMilliseconds, JsonSerializer.Serialize(counts)));
+        // … then flush telemetry so it lands before the caller inspects the results (None: flush even
+        // when the run token is cancelled on shutdown).
+        await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
         LogDrained(logger, total);
         return counts;
     }
@@ -97,6 +122,7 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
         IProducer<string, GenericRecord> producer,
         ConsumeResult<string, string> result,
         Dictionary<string, int> counts,
+        string traceId,
         CancellationToken cancellationToken)
     {
         var spec = CurationCatalog.ForRawTopic(result.Topic);
@@ -113,6 +139,7 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
         catch (JsonException ex)
         {
             LogParseError(logger, result.Topic, ex.Message);
+            RecordError(traceId, "parse-failed", ex);
             return false;
         }
 
@@ -121,6 +148,7 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
             return false;   // hard delete — OltpDb soft-deletes, so this does not occur; skip defensively
         }
 
+        var stopwatch = Stopwatch.StartNew();
         Avro.Generic.GenericRecord record;
         string key;
         try
@@ -130,6 +158,7 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
         catch (InvalidOperationException ex)
         {
             LogProjectError(logger, result.Topic, ex.Message);   // malformed record — skip, don't crash the run
+            RecordError(traceId, "projection-failed", ex);
             return false;
         }
 
@@ -137,10 +166,28 @@ public sealed partial class CurationEngine(CurationOptions options, ILogger<Cura
             spec.CuratedTopic,
             new Message<string, GenericRecord> { Key = key, Value = record },
             cancellationToken).ConfigureAwait(false);
+        stopwatch.Stop();
 
         counts[spec.Entity]++;
+
+        // Per-record telemetry: the project+produce latency for this entity (a pipeline_events sample
+        // feeding the latency MV) and the end-to-end CDC lag (now − source-commit-time).
+        telemetry.RecordStage(new PipelineStageEvent(
+            DateTimeOffset.UtcNow, traceId, PipelineName, spec.Entity, "ok",
+            (uint)stopwatch.ElapsedMilliseconds, JsonSerializer.Serialize(new { entity = spec.Entity, key })));
+
+        if (change.SourceTsMs > 0)
+        {
+            var lagSeconds = (DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(change.SourceTsMs)).TotalSeconds;
+            telemetry.RecordCdcLag(new CdcLagSample(DateTimeOffset.UtcNow, "oltp", result.Topic, lagSeconds));
+        }
+
         return true;
     }
+
+    private void RecordError(string traceId, string errorCode, Exception ex) =>
+        telemetry.RecordError(new PipelineError(
+            DateTimeOffset.UtcNow, traceId, PipelineName, errorCode, ex.Message, ex.StackTrace ?? string.Empty));
 
     private async Task EnsureCuratedTopicsAsync()
     {
