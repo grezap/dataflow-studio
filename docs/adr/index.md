@@ -12,6 +12,8 @@ ADR lifecycle (MASTER-PLAN §7.3): `planned` → `proposed` → `accepted` | `de
 | [ADR-0006](ADR-0006-sink-load-strategy.md) | Sink load strategy (StarRocks .NET worker + ClickHouse native) | accepted | 2026-07-17 |
 | [ADR-0007](ADR-0007-data-driven-curation-catalog.md) | A data-driven curation catalog (Ingestion module's non-AOT stance) | accepted | 2026-07-17 |
 | [ADR-0008](ADR-0008-clickhouse-native-telemetry-ingestion.md) | ClickHouse native telemetry ingestion + the pipeline-telemetry seam | accepted | 2026-07-19 |
+| [ADR-0009](ADR-0009-shouldly-over-fluentassertions.md) | Shouldly instead of FluentAssertions (assertion-library licence risk) | accepted | 2026-07-19 |
 
-> Target for v0.1.0: ≥5 ADRs (MASTER-PLAN §6) — **met** (8 ADRs). ADR-0008 completes the
-> ClickHouse-native half of ADR-0006 (Week-3 Session 3D).
+> Target for v0.1.0: ≥5 ADRs (MASTER-PLAN §6) — **met** (9 ADRs). ADR-0008 completes the
+> ClickHouse-native half of ADR-0006 (Week-3 Session 3D); ADR-0009 supersedes the FluentAssertions
+> choice recorded in MASTER-PLAN E12.

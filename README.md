@@ -104,9 +104,13 @@ Connection strings and secrets are injected at deploy time by the Vault Agent
 
 ## 10. Testing
 
-xUnit + FluentAssertions (unit) · NetArchTest (architecture) · Testcontainers (integration — real
-SQL Server; real Kafka/StarRocks/ClickHouse in later weeks). Coverage gate: 80% application layer
-(E12) — enforced from Week 4.
+xUnit + [Shouldly](https://github.com/shouldly/shouldly) (unit) · NetArchTest (architecture) ·
+Testcontainers (integration — real SQL Server; real Kafka/StarRocks/ClickHouse in later weeks).
+Coverage gate: 80% application layer (E12) — enforced from Week 4.
+
+> Shouldly rather than FluentAssertions: FA v8+ is proprietary (commercial use needs a paid licence)
+> and v7 is Apache-2.0 but critical-fixes-only. Shouldly is MIT and independently maintained, so
+> there is no licence boundary to interpret — see [ADR-0009](docs/adr/ADR-0009-shouldly-over-fluentassertions.md).
 
 ## 11. Observability
 

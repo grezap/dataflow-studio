@@ -1,6 +1,6 @@
 using Avro;
 using DataFlowStudio.Modules.Ingestion.Curation;
-using FluentAssertions;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.UnitTests;
@@ -12,6 +12,9 @@ namespace DataFlowStudio.UnitTests;
 /// </summary>
 public sealed class CurationTests
 {
+    /// <summary>The envelope fields every curated record carries, regardless of entity.</summary>
+    private static readonly string[] EnvelopeFields = ["operation", "sourceTsMs", "curatedAtUtc"];
+
     private static EntityCurationSpec Spec(string entity) =>
         CurationCatalog.All.Single(s => s.Entity == entity);
 
@@ -21,31 +24,31 @@ public sealed class CurationTests
     [Fact]
     public void Every_catalog_spec_builds_a_valid_schema_with_envelope_fields()
     {
-        CurationCatalog.All.Should().NotBeEmpty();
+        CurationCatalog.All.ShouldNotBeEmpty();
 
         foreach (var spec in CurationCatalog.All)
         {
             var schema = spec.Schema;   // throws if the generated JSON is not valid Avro
-            schema.Name.Should().Be(spec.RecordName);
+            schema.Name.ShouldBe(spec.RecordName);
 
             var fieldNames = schema.Fields.Select(f => f.Name).ToList();
-            fieldNames.Should().Contain(["operation", "sourceTsMs", "curatedAtUtc"]);
+            EnvelopeFields.ShouldBeSubsetOf(fieldNames);
             foreach (var field in spec.Fields)
             {
-                fieldNames.Should().Contain(field.Name);
+                fieldNames.ShouldContain(field.Name);
             }
 
             // The key field must be one of the projected fields.
-            fieldNames.Should().Contain(spec.KeyField);
+            fieldNames.ShouldContain(spec.KeyField);
         }
     }
 
     [Fact]
     public void Curated_topics_and_raw_topics_are_unique_and_paired()
     {
-        CurationCatalog.All.Select(s => s.RawTopic).Should().OnlyHaveUniqueItems();
-        CurationCatalog.All.Select(s => s.CuratedTopic).Should().OnlyHaveUniqueItems();
-        CurationCatalog.RawTopics.Should().HaveCount(CurationCatalog.All.Count);
+        CurationCatalog.All.Select(s => s.RawTopic).ShouldBeUnique();
+        CurationCatalog.All.Select(s => s.CuratedTopic).ShouldBeUnique();
+        CurationCatalog.RawTopics.Count.ShouldBe(CurationCatalog.All.Count);
     }
 
     [Fact]
@@ -58,26 +61,26 @@ public sealed class CurationTests
             """);
 
         var change = DebeziumChange.Parse(raw);
-        change.Operation.Should().Be("insert");
-        change.HasAfter.Should().BeTrue();
+        change.Operation.ShouldBe("insert");
+        change.HasAfter.ShouldBeTrue();
 
         var (record, key) = CuratedRecordProjector.Project(spec, change);
 
-        key.Should().Be("SEED-C001");
-        record["customerId"].Should().Be(42L);
-        record["customerCode"].Should().Be("SEED-C001");
-        record["preferredLocale"].Should().Be("en-US");
-        record["status"].Should().Be(1);
-        record["lifetimeValueUsd"].Should().Be("318.18");   // decimals carried as strings
-        record["operation"].Should().Be("insert");
-        record["sourceTsMs"].Should().Be(1_700_000_000_000L);
+        key.ShouldBe("SEED-C001");
+        record["customerId"].ShouldBe(42L);
+        record["customerCode"].ShouldBe("SEED-C001");
+        record["preferredLocale"].ShouldBe("en-US");
+        record["status"].ShouldBe(1);
+        record["lifetimeValueUsd"].ShouldBe("318.18");   // decimals carried as strings
+        record["operation"].ShouldBe("insert");
+        record["sourceTsMs"].ShouldBe(1_700_000_000_000L);
     }
 
     [Fact]
     public void Snapshot_reads_map_to_the_snapshot_operation()
     {
         var change = DebeziumChange.Parse(Envelope("r", 1, """{"CustomerId":1,"CustomerCode":"X","DisplayName":"n","Email":"e","PreferredLocale":"en","Status":1,"LifetimeValueUsd":"0"}"""));
-        change.Operation.Should().Be("snapshot");
+        change.Operation.ShouldBe("snapshot");
     }
 
     [Fact]
@@ -90,8 +93,8 @@ public sealed class CurationTests
 
         var (record, _) = CuratedRecordProjector.Project(spec, DebeziumChange.Parse(raw));
 
-        record["parentId"].Should().BeNull();
-        record["categoryId"].Should().Be(10);
+        record["parentId"].ShouldBeNull();
+        record["categoryId"].ShouldBe(10);
     }
 
     [Fact]
@@ -106,9 +109,9 @@ public sealed class CurationTests
 
         var (record, key) = CuratedRecordProjector.Project(spec, DebeziumChange.Parse(raw));
 
-        key.Should().Be("SEED-ORD-0001");
-        record["placedAtUtc"].Should().Be(1719830400000L);
-        record["totalUsd"].Should().Be("318.18");
+        key.ShouldBe("SEED-ORD-0001");
+        record["placedAtUtc"].ShouldBe(1719830400000L);
+        record["totalUsd"].ShouldBe("318.18");
     }
 
     [Fact]
@@ -119,14 +122,15 @@ public sealed class CurationTests
 
         var act = () => CuratedRecordProjector.Project(spec, DebeziumChange.Parse(raw));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*not nullable*");
+        Should.Throw<InvalidOperationException>(() => act())
+              .Message.ShouldContain("not nullable");
     }
 
     [Fact]
     public void Delete_without_after_is_flagged_as_no_after()
     {
         var change = DebeziumChange.Parse("""{"payload":{"op":"d","source":{"ts_ms":1},"after":null,"before":{"CustomerCode":"X"}}}""");
-        change.Operation.Should().Be("delete");
-        change.HasAfter.Should().BeFalse();
+        change.Operation.ShouldBe("delete");
+        change.HasAfter.ShouldBeFalse();
     }
 }

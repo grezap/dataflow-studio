@@ -6,6 +6,20 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Changed — assertion library: FluentAssertions → Shouldly
+
+- **Migrated the whole test suite to [Shouldly](https://github.com/shouldly/shouldly) (MIT)**
+  (ADR-0009). FluentAssertions v8+ is proprietary — commercial use requires a paid Xceed licence, and
+  Xceed's public FAQ does not define "commercial" vs "non-commercial"; v7 stays Apache-2.0 but is
+  critical-fixes-only. Shouldly is MIT and independently maintained, closing the question permanently.
+- Done now, at **82 assertions across 9 files**, rather than after the Week-4 80%-coverage push.
+- An audit before deciding showed the usual objections to Shouldly do not apply here: **zero**
+  `AssertionScope` uses, and the 3 `BeEquivalentTo` uses are collection comparisons (→
+  `ShouldBe(…, ignoreOrder: true)`), not object-graph diffing.
+- **Mutation-checked**: corrupting an expected value and a collection member made the suite fail,
+  confirming the rewritten assertions still assert.
+- Dependabot PR #7 (`FluentAssertions 6.12.2 → 8.10.0`) closed as superseded; MASTER-PLAN E12 updated.
+
 ### Added — Week 3 (Session 3D): ClickHouse telemetry sink (native Kafka-engine ingestion)
 
 - **The pipeline observes itself** (ADR-0008) — the curation engine emits a stage event per curated

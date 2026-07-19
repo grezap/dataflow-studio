@@ -5,8 +5,8 @@ using DataFlowStudio.Modules.Ingestion;
 using DataFlowStudio.Modules.Telemetry;
 using DataFlowStudio.Modules.Warehouse;
 using DataFlowStudio.SharedKernel;
-using FluentAssertions;
 using NetArchTest.Rules;
+using Shouldly;
 using Xunit;
 
 namespace DataFlowStudio.Architecture.Tests;
@@ -68,7 +68,7 @@ public sealed class ArchitectureTests
             .HaveDependencyOnAny(forbiddenNamespaces)
             .GetResult();
 
-        result.IsSuccessful.Should().BeTrue(
+        result.IsSuccessful.ShouldBeTrue(
             $"{assembly.GetName().Name} must not depend on [{string.Join(", ", forbiddenNamespaces)}]; " +
             $"offending types: {string.Join(", ", result.FailingTypeNames ?? [])}");
     }

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using ClickHouse.Client.ADO;
 using DataFlowStudio.Migrations.Clickhouse;
-using FluentAssertions;
+using Shouldly;
 using Testcontainers.ClickHouse;
 using Xunit;
 
@@ -76,14 +76,14 @@ public sealed class ClickHouseMigrationIdempotencyTests : IAsyncLifetime
             : ClickHouseMigrationProfile.SingleNode();
 
         var first = ClickHouseMigrationRunner.MigrateUp(() => new ClickHouseConnection(_connectionString), profile);
-        first.Successful.Should().BeTrue(first.Error);
-        first.ScriptsExecuted.Should().NotBeEmpty("the first run applies every script");
-        CountPresent().Should().Be(ClickHouseTables.All.Count, "every analytics object exists after the first apply");
+        first.Successful.ShouldBeTrue(first.Error);
+        first.ScriptsExecuted.ShouldNotBeEmpty("the first run applies every script");
+        CountPresent().ShouldBe(ClickHouseTables.All.Count, "every analytics object exists after the first apply");
 
         var second = ClickHouseMigrationRunner.MigrateUp(() => new ClickHouseConnection(_connectionString), profile);
-        second.Successful.Should().BeTrue(second.Error);
-        second.ScriptsExecuted.Should().BeEmpty("re-applying a fully-migrated schema is a no-op");
-        CountPresent().Should().Be(ClickHouseTables.All.Count, "the schema is unchanged after the second apply");
+        second.Successful.ShouldBeTrue(second.Error);
+        second.ScriptsExecuted.ShouldBeEmpty("re-applying a fully-migrated schema is a no-op");
+        CountPresent().ShouldBe(ClickHouseTables.All.Count, "the schema is unchanged after the second apply");
     }
 
     private int CountPresent()
