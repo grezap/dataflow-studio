@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup Label="ASP.NET Core host — OpenAPI (E14) generated from the composition root">
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Transitive pin: AspNetCore.OpenApi 10.x resolves Microsoft.OpenApi 2.0.0, which carries
          advisory GHSA-v5pm-xwqc-g5wc (patched in 2.7.5). Pin up to the latest 2.x. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.10.0" />
