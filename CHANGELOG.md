@@ -6,6 +6,24 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — OpenTelemetry OTLP export to the observability tier (E16, ADR-0010, Week-3 Session 3E.2)
+
+- **Per-stage distributed-tracing spans.** A single `DataflowActivity` ActivitySource (in
+  `SharedKernel.Telemetry`, so a module never references the Telemetry module) — the curation engine
+  emits a `curation.drain` root with a per-record `curate` child; the warehouse-sink engine emits a
+  `warehouse-sink.load` root with a `sink.<stage>` child per loader. Each run's OTel **trace id becomes
+  the ClickHouse `pipeline_events.trace_id`**, so a run correlates across Tempo + ClickHouse.
+- **Traces → Tempo, metrics → Prometheus.** The consoles (and the Api host) wire
+  `Nexus.Observability` (**nexus-shared 0.2.0**) when `DFS_OTLP_ENDPOINT` is set: OTLP over HTTP/protobuf
+  to the lab collector, trusting the lab PKI root for the collector's private-CA server certificate
+  (server-TLS only — no client cert). The `DataFlowStudio.Telemetry` meter is registered too, so
+  `dfs_telemetry_emitted_records_total` reaches Prometheus.
+- **New `scripts/dfs-otel-demo.ps1`** — runs the curation drain (and, with `-IncludeWarehouseSink`, the
+  StarRocks load) with OTLP on, then points at Grafana / Tempo / Prometheus to inspect the result.
+- **Live-proven (3E.2):** a curation drain produced a `dfs-curation` Tempo trace of `curation.drain` +
+  28 `curate` spans (resolvable in Grafana's Tempo datasource) and
+  `dfs_telemetry_emitted_records_total{stream=pipeline_events}=29,{cdc_lag}=28` in Prometheus.
+
 ### Added — replay completeness (full-replay documentation standard)
 
 - **`DataFlowStudio.Telemetry` console + `scripts/dfs-telemetry.ps1`** — reads the pipeline's own

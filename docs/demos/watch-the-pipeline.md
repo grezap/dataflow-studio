@@ -5,11 +5,13 @@ Follow one customer record across every face of the pipeline using everyday tool
 telemetry. Every endpoint, port, and credential is listed so you can reproduce each hop yourself.
 
 Faces 1–5 are the **data** path (OLTP write → CDC → raw Debezium → curated Avro → the StarRocks
-star). Face 6 is the **observability** path: the pipeline reporting on itself.
+star). Faces 6–7 are the **observability** path: the pipeline reporting on itself — natively into
+ClickHouse (Face 6) and as an OpenTelemetry trace in Grafana Tempo (Face 7).
 
 > **Prereqs:** SQL AG + `kafka-east` + `schema-registry` + `kafka-connect` powered on, the Debezium
 > `oltp-cdc` connector running, Vault unsealed. Face 5 additionally needs StarRocks; Face 6 needs
-> ClickHouse. The one-command version of the Faces 1–5 flow is `.\scripts\dfs-trace.ps1`.
+> ClickHouse; Face 7 needs the observability tier (OTel collector + Tempo + Prometheus + Grafana). The
+> one-command version of the Faces 1–5 flow is `.\scripts\dfs-trace.ps1`; Face 7 is `.\scripts\dfs-otel-demo.ps1`.
 
 ---
 
@@ -259,6 +261,25 @@ WHERE database = 'analytics' AND (name LIKE '%_kafka' OR name LIKE '%_kafka_mv')
 
 Six objects: three `Kafka` readers and three `MaterializedView` triggers that reshape each row into
 its destination table. That is the engine doing the ETL.
+
+---
+
+## Face 7 — the same run as a Grafana trace (OpenTelemetry, E16)
+
+Face 6 read the telemetry out of ClickHouse. Face 7 watches the *same run* as a distributed trace in
+**Grafana Tempo**. Run the pipeline with OTLP export on:
+
+```powershell
+.\scripts\dfs-otel-demo.ps1     # curation drain with OTLP; -IncludeWarehouseSink also loads the DWH
+```
+
+Then open **Grafana** (`https://grafana.nexus.lab` / VIP `192.168.70.184:3000`; admin / Vault
+`nexus/observability/grafana/admin-password`) → **Explore → Tempo → Service Name `dfs-curation`**. The
+trace is a `curation.drain` root with one `curate` span per record (tags: entity, key, topics) — the
+project+produce waterfall. Because each run's OTel **trace id is the ClickHouse `pipeline_events.trace_id`**,
+the Tempo trace and the Face-6 ClickHouse rows are the *same* run seen two ways. The emit counter
+(`dfs_telemetry_emitted_records_total`, by `stream`) lands in **Prometheus** over the collector's
+remote-write. Full walk-through + the verify commands: handbook §1.8b (ADR-0010).
 
 ---
 

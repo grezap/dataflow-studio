@@ -32,14 +32,11 @@ public sealed class TelemetryModule : IModule
             services.AddHostedService<TelemetryTopicInitializer>();
 
             // E16: export traces + metrics only when the collector endpoint is set; without it the
-            // ActivitySource/Meter have no listeners and cost nothing (the obs tier lands in 3E).
-            if (options.OtlpEndpoint is not null)
+            // ActivitySource/Meter have no listeners and cost nothing. The options register the pipeline
+            // ActivitySource + the emit Meter and trust the lab CA for the collector's server cert.
+            if (ObservabilityWiring.TryCreateOptions(configuration, options.ServiceName, out var obsOptions))
             {
-                services.AddNexusObservability(new ObservabilityOptions
-                {
-                    ServiceName = options.ServiceName,
-                    OtlpEndpoint = options.OtlpEndpoint,
-                });
+                services.AddNexusObservability(obsOptions);
             }
         }
         else

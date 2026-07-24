@@ -6,11 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup Label="nexus-shared (0.J) — the Nexus.* family from GitHub Packages">
-    <PackageVersion Include="Nexus.Primitives" Version="0.1.0" />
+    <PackageVersion Include="Nexus.Primitives" Version="0.2.0" />
     <PackageVersion Include="Nexus.Vault" Version="0.1.0" />
     <PackageVersion Include="Nexus.Kafka" Version="0.1.0" />
     <PackageVersion Include="Nexus.Avro" Version="0.1.0" />
-    <PackageVersion Include="Nexus.Observability" Version="0.1.0" />
+    <PackageVersion Include="Nexus.Observability" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup Label="Data access — Dapper on the AOT-friendly paths (E4: no EF Core on AOT paths)">

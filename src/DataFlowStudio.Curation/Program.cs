@@ -36,6 +36,12 @@ Console.CancelKeyPress += (_, e) =>
 // Telemetry (ADR-0008): a live Kafka sink when DFS_KAFKA_* is set (same env as curation), else a no-op.
 // The curation engine emits per-record stage latency + CDC lag through it as it drains.
 var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFactory, cts.Token).ConfigureAwait(false);
+
+// E16: start OTLP export (curate spans + the emit counter) when DFS_OTLP_ENDPOINT is set. Disposed after
+// the drain so the final spans + metric collection flush to the lab collector (traces→Tempo, metrics→Prom).
+var serviceName = configuration["DFS_OTEL_SERVICE"] ?? "dataflow-studio";
+using var observability = ObservabilityConsole.TryStart(configuration, serviceName);
+
 var engine = new CurationEngine(options, loggerFactory.CreateLogger<CurationEngine>(), telemetry);
 
 var counts = await engine.RunAsync(drainMode: true, cts.Token).ConfigureAwait(false);

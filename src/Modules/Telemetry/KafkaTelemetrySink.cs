@@ -26,7 +26,10 @@ public sealed partial class KafkaTelemetrySink(
     ILogger<KafkaTelemetrySink> logger,
     ClickHouseErrorSink errorFallback) : IPipelineTelemetrySink, IAsyncDisposable
 {
-    private static readonly Meter Meter = new("DataFlowStudio.Telemetry");
+    /// <summary>The Meter name the OTLP exporter registers (via the additional-meters list) so the emit counter exports (E16).</summary>
+    public const string MeterName = "DataFlowStudio.Telemetry";
+
+    private static readonly Meter Meter = new(MeterName);
     private static readonly Counter<long> EmittedCounter =
         Meter.CreateCounter<long>("dfs.telemetry.emitted", unit: "records", description: "Telemetry records produced, by stream.");
 

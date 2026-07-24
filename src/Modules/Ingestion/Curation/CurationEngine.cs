@@ -61,7 +61,11 @@ public sealed partial class CurationEngine(
         consumer.Subscribe(CurationCatalog.RawTopics);
 
         LogStarted(logger, options.ConsumerGroup, drainMode);
-        var traceId = Guid.NewGuid().ToString("N");
+        // Root span for the whole drain; the per-record curate spans nest under it, and the ClickHouse
+        // pipeline_events reuse its trace id so a run correlates across Tempo + ClickHouse (E16). When no
+        // OTLP exporter is wired StartActivity returns null and we fall back to a random trace id.
+        using var runActivity = DataflowActivity.Source.StartActivity("curation.drain", ActivityKind.Internal);
+        var traceId = runActivity?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
         var runStopwatch = Stopwatch.StartNew();
         var lastMessageUtc = DateTime.UtcNow;
 
@@ -105,6 +109,8 @@ public sealed partial class CurationEngine(
 
         int total = counts.Values.Sum();
         runStopwatch.Stop();
+        runActivity?.SetTag("dfs.records", total);
+        runActivity?.SetTag("dfs.drain_mode", drainMode);
 
         // A run-summary stage event (the whole drain's latency + per-entity counts) …
         telemetry.RecordStage(new PipelineStageEvent(
@@ -131,6 +137,12 @@ public sealed partial class CurationEngine(
             return false;   // unknown topic or a tombstone
         }
 
+        // One span per curated record — it nests under the drain root, so Tempo shows the per-entity
+        // project+produce waterfall (E16). Null (no-op) when no OTLP exporter is wired.
+        using var recordActivity = DataflowActivity.Source.StartActivity("curate", ActivityKind.Internal);
+        recordActivity?.SetTag("dfs.raw_topic", result.Topic);
+        recordActivity?.SetTag("dfs.entity", spec.Entity);
+
         DebeziumChange change;
         try
         {
@@ -140,6 +152,7 @@ public sealed partial class CurationEngine(
         {
             LogParseError(logger, result.Topic, ex.Message);
             RecordError(traceId, "parse-failed", ex);
+            recordActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             return false;
         }
 
@@ -159,6 +172,7 @@ public sealed partial class CurationEngine(
         {
             LogProjectError(logger, result.Topic, ex.Message);   // malformed record — skip, don't crash the run
             RecordError(traceId, "projection-failed", ex);
+            recordActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             return false;
         }
 
@@ -169,6 +183,8 @@ public sealed partial class CurationEngine(
         stopwatch.Stop();
 
         counts[spec.Entity]++;
+        recordActivity?.SetTag("dfs.curated_topic", spec.CuratedTopic);
+        recordActivity?.SetTag("dfs.key", key);
 
         // Per-record telemetry: the project+produce latency for this entity (a pipeline_events sample
         // feeding the latency MV) and the end-to-end CDC lag (now − source-commit-time).

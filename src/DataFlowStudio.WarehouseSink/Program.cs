@@ -38,6 +38,12 @@ Console.CancelKeyPress += (_, e) =>
 // Telemetry (ADR-0008): a live Kafka sink when DFS_KAFKA_* is set, else a no-op. The sink engine emits
 // a per-loader-stage latency event through it as it loads the star.
 var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFactory, cts.Token).ConfigureAwait(false);
+
+// E16: start OTLP export (sink-stage spans + the emit counter) when DFS_OTLP_ENDPOINT is set. Disposed
+// after the load so the final spans + metric collection flush to the lab collector (traces→Tempo, metrics→Prom).
+var serviceName = configuration["DFS_OTEL_SERVICE"] ?? "dataflow-studio";
+using var observability = ObservabilityConsole.TryStart(configuration, serviceName);
+
 var engine = new WarehouseSinkEngine(options, loggerFactory.CreateLogger<WarehouseSinkEngine>(), telemetry);
 
 var counts = await engine.RunAsync(cts.Token).ConfigureAwait(false);
