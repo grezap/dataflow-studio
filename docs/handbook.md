@@ -338,6 +338,49 @@ sudo /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server 192.168.10.21:9
 
 </details>
 
+### 1.8b Verify the OpenTelemetry export (traces → Tempo, metrics → Prometheus) — E16, ADR-0010
+
+Bring up the **observability tier** (Phase 0.I: `otel-collector-1/2`, `tempo-1/2/3`, `prom-1/2`,
+`grafana-1/2` + the MinIO S3 backend) alongside kafka-east + schema-registry, then run the pipeline
+with OTLP export on:
+
+```powershell
+# Curation drain with OTLP (traces + the emit counter) -> the lab collector.
+# -IncludeWarehouseSink also runs the StarRocks load (needs the StarRocks tier up).
+.\scripts\dfs-otel-demo.ps1
+```
+
+The script issues the Kafka mTLS client cert (as `dfs-curate.ps1` does) and additionally sets:
+
+- `DFS_OTLP_ENDPOINT=https://192.168.70.182:4318` — the collector's **HTTP/protobuf** receiver. Use a
+  collector **IP** from a WORKGROUP host (the leaf carries an IP SAN; `otel.nexus.lab` won't resolve).
+- `DFS_OTLP_CACERT=~/.nexus/vault-ca-bundle.crt` — the lab PKI **root**; the collector is **server-TLS
+  only** (no client cert) and serves its own intermediate, so the root alone completes the chain.
+
+Verify (SSH-local-curl on the nodes, per the obs access posture):
+
+```bash
+# Traces in Tempo — the run's service + spans (curation.drain root + one curate per record):
+ssh nexusadmin@192.168.70.175 "sudo curl -s --cacert /etc/nexus-tempo/tls/ca.crt \
+  'https://127.0.0.1:3200/api/search?q=%7B%20resource.service.name%3D%22dfs-curation%22%20%7D&limit=5'"
+# then GET /api/traces/<traceID> and read the span names.
+
+# Metrics in Prometheus — the emit counter, by stream (check BOTH proms; see the caveat below):
+ssh nexusadmin@192.168.70.171 "sudo curl -s --cacert /etc/nexus-prometheus/tls/ca.crt \
+  'https://127.0.0.1:9090/api/v1/query?query=dfs_telemetry_emitted_records_total'"
+```
+
+In **Grafana** (`https://192.168.70.184:3000`, admin / KV `nexus/observability/grafana/admin-password`):
+Explore → Tempo → Service Name `dfs-curation` renders the trace waterfall.
+
+Two things that will bite (both fixed / documented, not defects — see the ledger T27–T29):
+
+- **Prometheus must run with `--web.enable-remote-write-receiver`** or the collector's metric push 404s.
+  The obs tier was missing this (fixed 3E.2 on prom-1/2 + in the obs Packer image).
+- The collector remote-writes to `prometheus.nexus.lab`, which RR-DNS-balances two **independent**
+  Prometheus instances — a remote-written metric lands on **one** of them, so query both. (An obs-tier
+  HA follow-up; not a dataflow-studio concern.)
+
 ### 1.9 Tear down
 
 Stop the tiers back to base 6 (`vmrun stop <vmx> soft`). Nothing is destroyed: OltpDb + CDC, the raw
@@ -353,6 +396,7 @@ and curated Kafka topics, and the DWH all survive a power-off and resume on powe
 | Week 2 — CDC → Kafka: Debezium raw → curated Avro · 5-face trace | ✅ live |
 | Week 3A — DbUp sink schema (StarRocks + ClickHouse) | ✅ live |
 | Week 3B — curation for all 10 order-flow entities · seed tool | ✅ live |
+| Week 3E.2 — OpenTelemetry OTLP export (spans → Tempo, metrics → Prometheus) | ✅ live |
 | Week 3C — StarRocks DWH sink (SCD2 dims + facts) | ✅ live |
 | Week 3D — ClickHouse telemetry sink (Kafka-engine native) | ✅ live |
 | Week 3E — Marquez (OpenLineage) + observability tier | ⏳ next |
@@ -433,6 +477,14 @@ before touching the lab, and fixed in `schemas/dataflow-studio/README.md`):
 | T25 | `SHOW BACKENDS` over `mysql -uroot` hangs / returns nothing | StarRocks `root` **has a password** (`nexus/analytics/starrocks/root-password`); a password-less probe fails silently and looks like "FE not ready" — always pass `-p` |
 | T26 | `cdc_lag_seconds` shows values in the hundreds of thousands | not a bug: the drain replays raw topics from earliest, so historical records report their true age. Issue fresh source changes before curating if you want small numbers |
 
+**OpenTelemetry export (3E.2):**
+
+| # | Symptom | Fix |
+|---|---|---|
+| T27 | OTLP export silently fails with **404** | OTel .NET does **not** append the per-signal path (`/v1/traces`, `/v1/metrics`) when the endpoint is set in code for HTTP/protobuf → it POSTs to the bare `:4318/`. `Nexus.Observability` 0.2.0 appends it. Enable `OTEL_DIAGNOSTICS.json` to see the swallowed error |
+| T28 | Metrics reach the collector but **never appear in Prometheus** | not a client bug: the collector remote-writes to Prometheus, which must run with **`--web.enable-remote-write-receiver`** (else `POST /api/v1/write` 404s). Fixed on prom-1/2 (obs tier). And the collector RR-DNS-balances **two independent** Proms — a metric lands on one, so query both |
+| T29 | Spans build but never appear in Tempo after a code change | a same-version NuGet cache masks a rebuilt `Nexus.*` package — clear `~/.nuget/packages/nexus.observability/<ver>` and re-restore, or bump the version. The `dfs-curation` service name comes from `DFS_OTEL_SERVICE` (default `dataflow-studio`) |
+
 ### 3.3 Known deferrals (not defects)
 
 - **Least-privilege sink users** — the loaders currently connect as `root`/`admin`. A `dfs_sink` user
@@ -442,5 +494,9 @@ before touching the lab, and fixed in `schemas/dataflow-studio/README.md`):
 - **Telemetry duplicates** — Kafka-engine ingestion is at-least-once and the telemetry tables are
   append-only, so a re-delivered batch can double-count. Accepted for telemetry (ADR-0008); the
   domain-data paths are all idempotent.
-- **OTel export** — the sink records an OpenTelemetry counter, but nothing exports it until an OTLP
-  endpoint is configured (`DFS_OTLP_ENDPOINT`). The observability tier lands in 3E.
+- **OTel export is live (3E.2, ADR-0010)** — the engines emit spans (`curation.drain`/`curate`,
+  `warehouse-sink.load`/`sink.<stage>`) and the emit counter, exported over OTLP to the lab collector
+  (traces→Tempo, metrics→Prometheus) when `DFS_OTLP_ENDPOINT` is set; see §1.8b. Remaining deferral:
+  the warehouse-sink OTLP run is script-supported (`dfs-otel-demo.ps1 -IncludeWarehouseSink`) but was
+  not live-run in 3E.2 (the StarRocks tier was left down for minimal-running-VMs); its spans use the
+  identical `DataflowActivity` seam proven by the curation drain.

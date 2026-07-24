@@ -117,8 +117,12 @@ Coverage gate: 80% application layer (E12) — enforced from Week 4.
 
 ## 11. Observability
 
-OpenTelemetry traces/metrics/logs flow to the Grafana LGTM stack (Phase 0.I); data lineage is
-emitted via OpenLineage to Marquez (E16). Wired in Week 3e.
+OpenTelemetry traces + metrics flow to the Grafana LGTM stack (Phase 0.I) over OTLP — **live** since
+Week 3e ([ADR-0010](docs/adr/ADR-0010-opentelemetry-otlp-export.md)): each pipeline run is a Tempo
+trace (`curation.drain`/`curate`, `warehouse-sink.load`/`sink.<stage>`) whose trace id also stamps the
+ClickHouse `pipeline_events`, and the emit counter reaches Prometheus. Run
+[`scripts/dfs-otel-demo.ps1`](scripts/dfs-otel-demo.ps1); see the handbook §1.8b. Data lineage via
+OpenLineage → Marquez (E16) lands next (Week 3f).
 
 ## 12. Operations
 
@@ -135,7 +139,8 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 | 3b | Curation for **all 10 order-flow entities** (data-driven catalog) · seed tool | ✅ done (live) |
 | 3c | **StarRocks DWH sink** — SCD2 dimensions + facts | ✅ done (live) |
 | 3d | **ClickHouse telemetry sink** — native Kafka-engine ingestion · CDC lag · latency percentiles | ✅ done (live) |
-| 3e–3f | Marquez (OpenLineage) + observability tier · real Face 5 | ⏳ |
+| 3e | **OpenTelemetry OTLP export** — per-stage spans → Tempo · metrics → Prometheus · Grafana ([ADR-0010](docs/adr/ADR-0010-opentelemetry-otlp-export.md)) | ✅ done (live) |
+| 3f | Marquez (OpenLineage) lineage · real Face 5 | ⏳ |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
 
 **The pipeline runs end-to-end on the lab today — and observes itself** — OLTP → CDC → Debezium →

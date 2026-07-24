@@ -44,6 +44,13 @@ public sealed partial class WarehouseSinkEngine(
     /// <param name="cancellationToken">Stops the consume loop.</param>
     public async Task<IReadOnlyDictionary<string, int>> RunAsync(CancellationToken cancellationToken)
     {
+        // Root span for the whole load (consume + every loader stage nests under it); the ClickHouse
+        // pipeline_events reuse its trace id so a load correlates across Tempo + ClickHouse (E16). Null
+        // (and a random trace id) when no OTLP exporter is wired.
+        using var runActivity = DataflowActivity.Source.StartActivity("warehouse-sink.load", ActivityKind.Internal);
+        var traceId = runActivity?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+        var runStopwatch = Stopwatch.StartNew();
+
         var byTopic = ConsumeSnapshot(cancellationToken);
 
         await using var client = new StarRocksClient(options.StarRocksConnection);
@@ -52,13 +59,12 @@ public sealed partial class WarehouseSinkEngine(
         var dim = new DimensionLoader(client);
         var fact = new FactLoader(client);
         var batchUtc = DateTime.UtcNow;
-        var traceId = Guid.NewGuid().ToString("N");
-        var runStopwatch = Stopwatch.StartNew();
 
         // Times one loader stage, emits a warehouse-sink pipeline event, and re-raises (as an error
         // event) any failure so a bad load is both observable and still fatal to the run.
         async Task Stage(string stage, Func<Task> load)
         {
+            using var stageActivity = DataflowActivity.Source.StartActivity("sink." + stage, ActivityKind.Internal);
             var stopwatch = Stopwatch.StartNew();
             try
             {
@@ -66,6 +72,7 @@ public sealed partial class WarehouseSinkEngine(
             }
             catch (Exception ex)
             {
+                stageActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 telemetry.RecordError(new PipelineError(
                     DateTimeOffset.UtcNow, traceId, PipelineName, $"{stage}-load-failed", ex.Message, ex.StackTrace ?? string.Empty));
                 await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
@@ -125,6 +132,7 @@ public sealed partial class WarehouseSinkEngine(
         var counts = byTopic.ToDictionary(kv => Entity(kv.Key), kv => kv.Value.Count, StringComparer.Ordinal);
         int total = counts.Values.Sum();
         runStopwatch.Stop();
+        runActivity?.SetTag("dfs.records", total);
 
         // A run-summary stage event (the whole load's latency + total records), then flush telemetry.
         telemetry.RecordStage(new PipelineStageEvent(
