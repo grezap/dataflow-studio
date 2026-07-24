@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
     <ProjectReference Include="../../DataFlowStudio.Clickhouse/DataFlowStudio.Clickhouse.csproj" />
+    <ProjectReference Include="../../DataFlowStudio.Lineage/DataFlowStudio.Lineage.csproj" />
   </ItemGroup>
 
   <ItemGroup Label="nexus-shared — Kafka mTLS producer + OTel bootstrap (E8/E16)">

@@ -6,7 +6,11 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
+using DataFlowStudio.Lineage;
+using DataFlowStudio.SharedKernel.Lineage;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Nexus.Avro;
 using Nexus.Kafka;
 
@@ -19,7 +23,7 @@ namespace DataFlowStudio.Trace;
 //   Face 2  CDC capture       SQL Server change table (cdc.dbo_Customers_CT)
 //   Face 3  Debezium raw      Kafka topic oltp.OltpDb.dbo.Customers (JSON CDC envelope)
 //   Face 4  Curated Avro      Kafka topic dfs.customers.changed.v1 (schema-registered Avro)
-//   Face 5  Sink              an in-memory projection (StarRocks/ClickHouse land in Week 3)
+//   Face 5  Sink + lineage    dwh.dim_customer (StarRocks, Week 3c) + an OpenLineage run to Marquez (E16)
 //
 // Config comes from environment variables (see Config.FromEnvironment). Secrets never live in code.
 internal static class Program
@@ -52,6 +56,13 @@ internal static class Program
     private static async Task<int> Main()
     {
         var cfg = Config.FromEnvironment();
+        // OpenLineage (E16): a live Marquez emitter when DFS_MARQUEZ_ENDPOINT is set, else a no-op — Face 5
+        // then emits this traced record's lineage run so it appears in Marquez.
+        var configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Warning));
+        var lineage = LineageEmitterFactory.Create(configuration, loggerFactory);
+        var marquezBase = configuration["DFS_MARQUEZ_ENDPOINT"];
+
         // A unique natural key per run so we can unambiguously follow THIS record through every hop.
         var code = "TRACE-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
         var name = "Trace Customer " + code;
@@ -64,15 +75,22 @@ internal static class Program
             await Face2_CdcCaptureAsync(cfg, code).ConfigureAwait(false);
             var raw = await Face3_DebeziumRawAsync(cfg, code).ConfigureAwait(false);
             await Face4_CuratedAvroAsync(cfg, raw).ConfigureAwait(false);
-            Face5_Sink(raw);
+            await Face5_SinkAsync(raw, lineage, marquezBase).ConfigureAwait(false);
 
-            Banner("DONE", $"customer {customerId} ('{code}') traversed OLTP → CDC → Debezium → curated Avro → sink.");
+            Banner("DONE", $"customer {customerId} ('{code}') traversed OLTP → CDC → Debezium → curated Avro → StarRocks DWH + OpenLineage.");
             return 0;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"\nTRACE FAILED: {ex.Message}");
             return 1;
+        }
+        finally
+        {
+            if (lineage is IDisposable disposableLineage)
+            {
+                disposableLineage.Dispose();
+            }
         }
     }
 
@@ -248,12 +266,31 @@ internal static class Program
         Console.WriteLine("  → downstream (StarRocks DWH, ClickHouse telemetry) reads this typed, versioned contract, not Debezium's raw shape.");
     }
 
-    // ── Face 5 ─ the sink (Week-2: in-memory projection; StarRocks/ClickHouse arrive Week 3) ───
-    private static void Face5_Sink(RawChange raw)
+    // ── Face 5 ─ the sink + OpenLineage run event (StarRocks DWH live since Week 3c; lineage E16) ──
+    private static async Task Face5_SinkAsync(RawChange raw, ILineageEmitter lineage, string? marquezBase)
     {
-        Face(5, "Sink", "materialize a projection (Week-3 wires StarRocks dwh + ClickHouse analytics)");
-        Console.WriteLine($"  dim_customer upsert → sk=(surrogate)  customer_id={raw.CustomerId}  code={raw.CustomerCode}  is_current=true");
-        Console.WriteLine("  → in Week 3 this becomes an SCD2 dimension load in StarRocks + a pipeline-telemetry row in ClickHouse.");
+        Face(5, "Sink + lineage", "the StarRocks DWH load + the OpenLineage run event (E16)");
+        Console.WriteLine($"  dim_customer SCD2 upsert → sk=(surrogate)  customer_id={raw.CustomerId}  code={raw.CustomerCode}  is_current=true");
+        Console.WriteLine("  → the curation worker + warehouse-sink load this for real (StarRocks dwh, live since Week 3c);");
+        Console.WriteLine("    the telemetry lands natively in ClickHouse analytics (Week 3d).");
+
+        // Emit this traced record's path as an OpenLineage run so Marquez renders its lineage graph:
+        //   oltp.OltpDb.dbo.Customers → [dfs-trace] → dfs.customers.changed.v1, dwh.dim_customer
+        string[] inputs = [RawTopic];
+        string[] outputs = [CuratedTopic, "dwh.dim_customer"];
+        var runId = Guid.NewGuid().ToString("D");
+        await lineage.StartAsync("dfs-trace", runId, inputs).ConfigureAwait(false);
+        await lineage.CompleteAsync("dfs-trace", runId, inputs, outputs).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(marquezBase))
+        {
+            Console.WriteLine($"  → OpenLineage run emitted: {RawTopic} → [dfs-trace] → {CuratedTopic} + dwh.dim_customer");
+            Console.WriteLine($"    view the graph in Marquez: {marquezBase.TrimEnd('/')}  (namespace 'dataflow-studio')");
+        }
+        else
+        {
+            Console.WriteLine("  → set DFS_MARQUEZ_ENDPOINT to also emit this record's OpenLineage run to Marquez (E16).");
+        }
     }
 
     // Ensures a topic exists (brokers have auto-create off), matching the Debezium topic.creation fix.

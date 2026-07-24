@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avro.Generic;
 using Confluent.Kafka;
 using Confluent.Kafka.SyncOverAsync;
+using DataFlowStudio.SharedKernel.Lineage;
 using DataFlowStudio.SharedKernel.Telemetry;
 using Microsoft.Extensions.Logging;
 using Nexus.Avro;
@@ -24,10 +25,18 @@ namespace DataFlowStudio.Modules.Warehouse.Sink;
 public sealed partial class WarehouseSinkEngine(
     WarehouseSinkOptions options,
     ILogger<WarehouseSinkEngine> logger,
-    IPipelineTelemetrySink telemetry)
+    IPipelineTelemetrySink telemetry,
+    ILineageEmitter lineage)
 {
     private const string Prefix = "dfs.";
     private const string PipelineName = "warehouse-sink";
+
+    // The DWH datasets this job writes — the outputs of the curated → DWH lineage edge (OpenLineage, E16).
+    private static readonly string[] DwhDatasets =
+    [
+        "dwh.dim_date", "dwh.dim_warehouse", "dwh.dim_carrier", "dwh.dim_customer", "dwh.dim_product",
+        "dwh.fact_order", "dwh.fact_order_line", "dwh.fact_transaction", "dwh.fact_inventory_snap",
+    ];
 
     private static readonly string[] Topics =
     [
@@ -50,6 +59,10 @@ public sealed partial class WarehouseSinkEngine(
         using var runActivity = DataflowActivity.Source.StartActivity("warehouse-sink.load", ActivityKind.Internal);
         var traceId = runActivity?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
         var runStopwatch = Stopwatch.StartNew();
+
+        // OpenLineage (E16): the 'warehouse-sink' job reads the curated topics and writes the DWH tables.
+        // The runId is the OTel trace id → the Marquez run correlates with the Tempo trace + pipeline_events.
+        await lineage.StartAsync(PipelineName, traceId, Topics, cancellationToken).ConfigureAwait(false);
 
         var byTopic = ConsumeSnapshot(cancellationToken);
 
@@ -139,6 +152,9 @@ public sealed partial class WarehouseSinkEngine(
             DateTimeOffset.UtcNow, traceId, PipelineName, "load", "ok",
             (uint)runStopwatch.ElapsedMilliseconds, $"{{\"records\":{total}}}"));
         await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // OpenLineage COMPLETE: the DWH tables are the run's outputs → the curated → DWH lineage edge.
+        await lineage.CompleteAsync(PipelineName, traceId, Topics, DwhDatasets, CancellationToken.None).ConfigureAwait(false);
 
         LogLoaded(logger, total);
         return counts;

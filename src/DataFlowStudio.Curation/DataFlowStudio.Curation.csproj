@@ -13,6 +13,8 @@
     <ProjectReference Include="../Modules/Ingestion/DataFlowStudio.Modules.Ingestion.csproj" />
     <!-- The telemetry sink instruments the curation drain (ADR-0008). -->
     <ProjectReference Include="../Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
+    <!-- The OpenLineage emitter records the raw -> curated lineage run (E16, ADR-0011). -->
+    <ProjectReference Include="../DataFlowStudio.Lineage/DataFlowStudio.Lineage.csproj" />
   </ItemGroup>
 
   <ItemGroup Label="Host plumbing — config from env + console logging">

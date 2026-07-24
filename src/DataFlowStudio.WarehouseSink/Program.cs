@@ -1,3 +1,4 @@
+using DataFlowStudio.Lineage;
 using DataFlowStudio.Modules.Telemetry;
 using DataFlowStudio.Modules.Warehouse.Sink;
 using Microsoft.Extensions.Configuration;
@@ -44,13 +45,21 @@ var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFact
 var serviceName = configuration["DFS_OTEL_SERVICE"] ?? "dataflow-studio";
 using var observability = ObservabilityConsole.TryStart(configuration, serviceName);
 
-var engine = new WarehouseSinkEngine(options, loggerFactory.CreateLogger<WarehouseSinkEngine>(), telemetry);
+// OpenLineage (E16): a live Marquez emitter when DFS_MARQUEZ_ENDPOINT is set, else a no-op. The sink
+// engine emits a curated → DWH lineage run through it (best-effort; never fails the load).
+var lineage = LineageEmitterFactory.Create(configuration, loggerFactory);
+var engine = new WarehouseSinkEngine(options, loggerFactory.CreateLogger<WarehouseSinkEngine>(), telemetry, lineage);
 
 var counts = await engine.RunAsync(cts.Token).ConfigureAwait(false);
 
 if (telemetry is IAsyncDisposable telemetryDisposable)
 {
     await telemetryDisposable.DisposeAsync().ConfigureAwait(false);
+}
+
+if (lineage is IDisposable lineageDisposable)
+{
+    lineageDisposable.Dispose();
 }
 
 Console.WriteLine();

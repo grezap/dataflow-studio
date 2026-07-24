@@ -1,7 +1,10 @@
+using DataFlowStudio.Lineage;
 using DataFlowStudio.SharedKernel;
+using DataFlowStudio.SharedKernel.Lineage;
 using DataFlowStudio.SharedKernel.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Nexus.Observability;
 
 namespace DataFlowStudio.Modules.Telemetry;
@@ -23,6 +26,10 @@ public sealed class TelemetryModule : IModule
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        // OpenLineage emitter (E16): a live Marquez emitter when DFS_MARQUEZ_ENDPOINT is set, else the
+        // no-op — always registered so the pipeline engines resolve their lineage dependency either way.
+        services.AddSingleton(sp => LineageEmitterFactory.Create(configuration, sp.GetRequiredService<ILoggerFactory>()));
+
         if (TelemetryOptionsFactory.TryFromConfiguration(configuration, out var options))
         {
             services.AddSingleton(options);

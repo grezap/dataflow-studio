@@ -14,8 +14,10 @@ ADR lifecycle (MASTER-PLAN §7.3): `planned` → `proposed` → `accepted` | `de
 | [ADR-0008](ADR-0008-clickhouse-native-telemetry-ingestion.md) | ClickHouse native telemetry ingestion + the pipeline-telemetry seam | accepted | 2026-07-19 |
 | [ADR-0009](ADR-0009-shouldly-over-fluentassertions.md) | Shouldly instead of FluentAssertions (assertion-library licence risk) | accepted | 2026-07-19 |
 | [ADR-0010](ADR-0010-opentelemetry-otlp-export.md) | OpenTelemetry OTLP export to the lab observability tier (E16) | accepted | 2026-07-24 |
+| [ADR-0011](ADR-0011-openlineage-marquez-emission.md) | OpenLineage emission to Marquez (E16) | accepted | 2026-07-25 |
 
-> Target for v0.1.0: ≥5 ADRs (MASTER-PLAN §6) — **met** (10 ADRs). ADR-0008 completes the
+> Target for v0.1.0: ≥5 ADRs (MASTER-PLAN §6) — **met** (11 ADRs). ADR-0008 completes the
 > ClickHouse-native half of ADR-0006 (Week-3 Session 3D); ADR-0009 supersedes the FluentAssertions
 > choice recorded in MASTER-PLAN E12; ADR-0010 wires the OTel export the telemetry seam (ADR-0008) was
-> built for, once the observability tier came online (Week-3 Session 3E.2).
+> built for, once the observability tier came online (Week-3 Session 3E.2); ADR-0011 emits OpenLineage to
+> the Marquez tier (ADR-0043), completing E16 (Week-3 Session 3F).
