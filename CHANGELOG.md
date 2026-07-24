@@ -6,6 +6,25 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — OpenLineage emission to Marquez (E16, ADR-0011, Week-3 Session 3F)
+
+- **The pipeline now emits data lineage.** A new `DataFlowStudio.Lineage` library + an `ILineageEmitter`
+  seam in the SharedKernel (module isolation, like the telemetry seam): the curation run is the
+  `curation` job (10 raw CDC topics → 10 curated topics), the warehouse-sink run is the `warehouse-sink`
+  job (10 curated → 9 DWH tables), and `dfs-trace` Face 5 emits a `dfs-trace` job for one traced record.
+- **Emitted straight from the build host** to the Marquez OpenLineage endpoint (`POST /api/v1/lineage`)
+  over the private-CA TLS front door by IP, trusting the lab PKI root (server-TLS only, no client cert —
+  the same custom-root trust as the OTLP exporter). Best-effort: an unreachable Marquez never fails a run.
+- **Each run's OpenLineage runId is its OpenTelemetry trace id**, so a run is one correlated entity across
+  Tempo (traces), ClickHouse (`pipeline_events`), and Marquez (lineage).
+- **Real Face 5.** `dfs-trace`'s fifth face now loads the real StarRocks `dwh.dim_customer` and emits the
+  traced record's OpenLineage run, pointing at the Marquez graph.
+- **New `scripts/dfs-lineage-demo.ps1`** — runs curation + warehouse-sink with lineage on, then reads the
+  graph back from Marquez (jobs, datasets, the downstream edges from a raw topic).
+- **Live-proven (3F):** the full graph landed in Marquez namespace `dataflow-studio` — **2 jobs + 29
+  datasets** (10 raw + 10 curated + 9 DWH); the downstream query from `oltp.OltpDb.dbo.Customers` returns
+  the whole curated + DWH layer.
+
 ### Added — OpenTelemetry OTLP export to the observability tier (E16, ADR-0010, Week-3 Session 3E.2)
 
 - **Per-stage distributed-tracing spans.** A single `DataflowActivity` ActivitySource (in

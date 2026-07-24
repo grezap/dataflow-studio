@@ -121,8 +121,11 @@ OpenTelemetry traces + metrics flow to the Grafana LGTM stack (Phase 0.I) over O
 Week 3e ([ADR-0010](docs/adr/ADR-0010-opentelemetry-otlp-export.md)): each pipeline run is a Tempo
 trace (`curation.drain`/`curate`, `warehouse-sink.load`/`sink.<stage>`) whose trace id also stamps the
 ClickHouse `pipeline_events`, and the emit counter reaches Prometheus. Run
-[`scripts/dfs-otel-demo.ps1`](scripts/dfs-otel-demo.ps1); see the handbook §1.8b. Data lineage via
-OpenLineage → Marquez (E16) lands next (Week 3f).
+[`scripts/dfs-otel-demo.ps1`](scripts/dfs-otel-demo.ps1); see the handbook §1.8b. **Data lineage** is
+live too (Week 3f; [ADR-0011](docs/adr/ADR-0011-openlineage-marquez-emission.md)): the curation +
+warehouse-sink runs emit OpenLineage to **Marquez**, rendering the `oltp.* → dfs.* → dwh.*` dataset
+graph — run [`scripts/dfs-lineage-demo.ps1`](scripts/dfs-lineage-demo.ps1) (handbook §1.8c). Each run's
+Marquez runId is its OTel trace id, so one run is one entity across Tempo, ClickHouse, and Marquez.
 
 ## 12. Operations
 
@@ -140,7 +143,7 @@ Deployed and operated through `nexus-cli deploy dataflow-studio`. The runbook (W
 | 3c | **StarRocks DWH sink** — SCD2 dimensions + facts | ✅ done (live) |
 | 3d | **ClickHouse telemetry sink** — native Kafka-engine ingestion · CDC lag · latency percentiles | ✅ done (live) |
 | 3e | **OpenTelemetry OTLP export** — per-stage spans → Tempo · metrics → Prometheus · Grafana ([ADR-0010](docs/adr/ADR-0010-opentelemetry-otlp-export.md)) | ✅ done (live) |
-| 3f | Marquez (OpenLineage) lineage · real Face 5 | ⏳ |
+| 3f | **OpenLineage → Marquez** — `curation` + `warehouse-sink` jobs · raw→curated→DWH graph · real Face 5 ([ADR-0011](docs/adr/ADR-0011-openlineage-marquez-emission.md)) | ✅ done (live) |
 | 4 | Tests to 80% · Aspire AppHost · Docker/Swarm/K8s · demo + recording · **v0.1.0** | ⏳ |
 
 **The pipeline runs end-to-end on the lab today — and observes itself** — OLTP → CDC → Debezium →

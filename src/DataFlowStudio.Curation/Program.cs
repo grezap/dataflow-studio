@@ -1,3 +1,4 @@
+using DataFlowStudio.Lineage;
 using DataFlowStudio.Modules.Ingestion.Curation;
 using DataFlowStudio.Modules.Telemetry;
 using Microsoft.Extensions.Configuration;
@@ -42,13 +43,21 @@ var telemetry = await TelemetrySinkFactory.CreateAsync(configuration, loggerFact
 var serviceName = configuration["DFS_OTEL_SERVICE"] ?? "dataflow-studio";
 using var observability = ObservabilityConsole.TryStart(configuration, serviceName);
 
-var engine = new CurationEngine(options, loggerFactory.CreateLogger<CurationEngine>(), telemetry);
+// OpenLineage (E16): a live Marquez emitter when DFS_MARQUEZ_ENDPOINT is set, else a no-op. The
+// curation engine emits a raw → curated lineage run through it (best-effort; never fails the drain).
+var lineage = LineageEmitterFactory.Create(configuration, loggerFactory);
+var engine = new CurationEngine(options, loggerFactory.CreateLogger<CurationEngine>(), telemetry, lineage);
 
 var counts = await engine.RunAsync(drainMode: true, cts.Token).ConfigureAwait(false);
 
 if (telemetry is IAsyncDisposable telemetryDisposable)
 {
     await telemetryDisposable.DisposeAsync().ConfigureAwait(false);
+}
+
+if (lineage is IDisposable lineageDisposable)
+{
+    lineageDisposable.Dispose();
 }
 
 Console.WriteLine();

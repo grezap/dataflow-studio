@@ -17,4 +17,12 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
 
+  <ItemGroup Label="OpenLineage → Marquez for Face 5 (E16) + its config/logging host plumbing">
+    <ProjectReference Include="../DataFlowStudio.Lineage/DataFlowStudio.Lineage.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
 </Project>

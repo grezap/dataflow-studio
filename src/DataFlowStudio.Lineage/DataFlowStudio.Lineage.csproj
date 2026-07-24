@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>DataFlowStudio.Lineage</RootNamespace>
+    <AssemblyName>DataFlowStudio.Lineage</AssemblyName>
+    <!--
+      A focused shared library that owns one concern: emitting OpenLineage run events to the lab's
+      Marquez backend over its private-CA TLS front door (E16, ADR-0011). BCL-only on the wire
+      (HttpClient + source-generated System.Text.Json) plus the Configuration/Logging abstractions.
+      The ILineageEmitter seam lives in SharedKernel so a module never references this concrete emitter
+      (module isolation, ADR-0001) — mirroring DataFlowStudio.Clickhouse's split.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

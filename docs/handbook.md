@@ -381,6 +381,44 @@ Two things that will bite (both fixed / documented, not defects — see the ledg
   Prometheus instances — a remote-written metric lands on **one** of them, so query both. (An obs-tier
   HA follow-up; not a dataflow-studio concern.)
 
+### 1.8c Verify the data lineage (OpenLineage → Marquez) — E16, ADR-0011
+
+Power on the **Marquez tier** (Phase 0.Q: `marquez` + the `marquez-pg` HA pair) alongside kafka-east +
+schema-registry (+ StarRocks for the DWH leg), then run the pipeline with OpenLineage on:
+
+```powershell
+# Curation + StarRocks DWH load, emitting OpenLineage; then read the graph back from Marquez.
+.\scripts\dfs-lineage-demo.ps1                     # -SkipWarehouseSink for the raw → curated leg only
+```
+
+The script issues the Kafka client cert (as `dfs-curate.ps1` does) and additionally sets:
+
+- `DFS_MARQUEZ_ENDPOINT=https://192.168.70.127` — the Marquez base URL. Use the **IP** (the front-door
+  leaf carries an IP SAN; `marquez.nexus.lab` won't resolve from a WORKGROUP host). The emitter appends
+  `/api/v1/lineage`. **Server-TLS only, no client cert.**
+- `DFS_MARQUEZ_CACERT=~/.nexus/vault-ca-bundle.crt` — the lab PKI **root**; the front door serves its own
+  intermediate, so the root alone completes the chain (`openssl verify` OK).
+- `DFS_MARQUEZ_NAMESPACE=dataflow-studio` — the OpenLineage namespace.
+
+Read the graph back (SSH-local-curl on the marquez node against the **world-readable** CA copy — the
+`/etc/nexus-marquez/tls/ca.crt` is root-only):
+
+```bash
+CA=/etc/ssl/certs/platform-tools-ca.pem
+CURL="curl -sS --cacert $CA --resolve marquez.nexus.lab:443:127.0.0.1"
+API=https://marquez.nexus.lab/api/v1
+$CURL "$API/namespaces/dataflow-studio/jobs"     | grep -o '"name":"[^"]*"' | sort -u   # curation, warehouse-sink
+$CURL "$API/namespaces/dataflow-studio/datasets" | grep -o '"name":"[^"]*"' | sort -u | wc -l   # 29
+# the "what breaks downstream?" query:
+$CURL "$API/lineage?nodeId=dataset:dataflow-studio:oltp.OltpDb.dbo.Customers&depth=10"
+```
+
+Open the graph in a browser at `https://192.168.70.127` (namespace `dataflow-studio`). Expect **2 jobs**
+(`curation`, `warehouse-sink`) + **29 datasets** (10 raw `oltp.OltpDb.dbo.*` → 10 curated
+`dfs.*.changed.v1` → 9 `dwh.dim_*`/`fact_*`), and the downstream query from `Customers` returning the
+whole curated + DWH layer. Because each run's OpenLineage runId is its OTel trace id, a Marquez run is the
+same run as its Tempo trace (§1.8b) and its ClickHouse `pipeline_events` (§1.8a).
+
 ### 1.9 Tear down
 
 Stop the tiers back to base 6 (`vmrun stop <vmx> soft`). Nothing is destroyed: OltpDb + CDC, the raw
@@ -397,6 +435,7 @@ and curated Kafka topics, and the DWH all survive a power-off and resume on powe
 | Week 3A — DbUp sink schema (StarRocks + ClickHouse) | ✅ live |
 | Week 3B — curation for all 10 order-flow entities · seed tool | ✅ live |
 | Week 3E.2 — OpenTelemetry OTLP export (spans → Tempo, metrics → Prometheus) | ✅ live |
+| Week 3F — OpenLineage emission → Marquez (raw → curated → DWH lineage graph) | ✅ live |
 | Week 3C — StarRocks DWH sink (SCD2 dims + facts) | ✅ live |
 | Week 3D — ClickHouse telemetry sink (Kafka-engine native) | ✅ live |
 | Week 3E — Marquez (OpenLineage) + observability tier | ⏳ next |
@@ -484,6 +523,14 @@ before touching the lab, and fixed in `schemas/dataflow-studio/README.md`):
 | T27 | OTLP export silently fails with **404** | OTel .NET does **not** append the per-signal path (`/v1/traces`, `/v1/metrics`) when the endpoint is set in code for HTTP/protobuf → it POSTs to the bare `:4318/`. `Nexus.Observability` 0.2.0 appends it. Enable `OTEL_DIAGNOSTICS.json` to see the swallowed error |
 | T28 | Metrics reach the collector but **never appear in Prometheus** | not a client bug: the collector remote-writes to Prometheus, which must run with **`--web.enable-remote-write-receiver`** (else `POST /api/v1/write` 404s). Fixed on prom-1/2 (obs tier). And the collector RR-DNS-balances **two independent** Proms — a metric lands on one, so query both |
 | T29 | Spans build but never appear in Tempo after a code change | a same-version NuGet cache masks a rebuilt `Nexus.*` package — clear `~/.nuget/packages/nexus.observability/<ver>` and re-restore, or bump the version. The `dfs-curation` service name comes from `DFS_OTEL_SERVICE` (default `dataflow-studio`) |
+
+**OpenLineage → Marquez (3F):**
+
+| # | Symptom | Fix |
+|---|---|---|
+| T30 | Marquez `:443` unreachable (build host + on-node localhost both time out) after power-on, though the containers show "Up" | the VM was **suspended**, not powered off — on resume the containers are stale (their API logs are frozen at suspend time) and Docker's published-port DNAT is gone (the boot-time `nft -f` wiped it — the flush-wipes-Docker rule). `sudo systemctl restart docker` on the marquez node refreshes both the containers and the DNAT; the API is 200 within ~30s |
+| T31 | lineage read-back `curl: (77) error setting certificate file: /etc/nexus-marquez/tls/ca.crt` | that CA is root-only (`0640 root:marquez`); the SSH-local-curl runs as `nexusadmin`. Use the **world-readable** copy `/etc/ssl/certs/platform-tools-ca.pem` (what the platform-tools demo uses) |
+| T32 | `curl --cacert ~/.nexus/vault-ca-bundle.crt https://192.168.70.127/...` fails on the Windows build host (exit 60/schannel) | schannel can't consume a PEM `--cacert` the way Linux curl does — a *curl* limitation, not a chain problem. The .NET emitter validates the front-door leaf against the same root via a custom callback (chains OK: leaf ← NexusPlatform Intermediate ← Root), and the leaf's IP SAN lets it connect by IP |
 
 ### 3.3 Known deferrals (not defects)
 

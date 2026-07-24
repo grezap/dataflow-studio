@@ -75,12 +75,14 @@ flowchart LR
     class OBS planned;
 ```
 
-> **Legend — build status (end of Week 3e):** green = built, tested and **live on the lab**;
-> grey-dashed = still to come. The whole data path is green — OltpDb → CDC/Debezium → Kafka+Schema
-> Registry → the StarRocks Kimball star, and ClickHouse ingesting the pipeline's own telemetry
-> natively. The **observability leg is now green too**: OpenTelemetry OTLP export sends per-stage
-> spans to Tempo and metrics to Prometheus (Grafana LGTM, Phase 0.I; ADR-0010). Only the OpenLineage →
-> Marquez lineage leg (Week 3f) remains.
+> **Legend — build status (end of Week 3f):** green = built, tested and **live on the lab**;
+> grey-dashed = still to come. **Every leg is now green.** The data path — OltpDb → CDC/Debezium →
+> Kafka+Schema Registry → the StarRocks Kimball star, with ClickHouse ingesting the pipeline's own
+> telemetry natively. The observability leg — OpenTelemetry OTLP export sends per-stage spans to Tempo
+> and metrics to Prometheus (Grafana LGTM, Phase 0.I; ADR-0010). And the **lineage leg** — the curation
+> + warehouse-sink runs emit OpenLineage to **Marquez** (Phase 0.Q; ADR-0011), rendering the
+> raw → curated → DWH dataset graph. Each run's OTel trace id is its ClickHouse `trace_id` and its
+> Marquez runId, so one run is one entity across all three planes.
 
 ---
 
@@ -138,8 +140,8 @@ flowchart TD
 | Module | Owns | Talks to | Status |
 |---|---|---|---|
 | **Commerce** | OLTP write-side over `OltpDb` (source of truth) | SQL Server (Dapper) | domain types real; write-side Week 2 |
-| **Ingestion** | CDC curation: raw Debezium → curated Avro, data-driven catalog (non-AOT, no EF) | Kafka (raw + curated), Schema Registry | all 10 order-flow entities (3B; ADR-0007) |
-| **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts) | Kafka (consume curated), StarRocks (MySQL wire) | loaded (3C; ADR-0006) |
+| **Ingestion** | CDC curation: raw Debezium → curated Avro, data-driven catalog (non-AOT, no EF); emits the `curation` OpenLineage job | Kafka (raw + curated), Schema Registry, Marquez (lineage) | all 10 order-flow entities (3B; ADR-0007); lineage 3F (ADR-0011) |
+| **Warehouse** | StarRocks Kimball DWH loaders (SCD2 dims + facts); emits the `warehouse-sink` OpenLineage job | Kafka (consume curated), StarRocks (MySQL wire), Marquez (lineage) | loaded (3C; ADR-0006); lineage 3F (ADR-0011) |
 | **Telemetry** | Pipeline self-observation: stage latency, CDC lag, errors; OTLP traces + metrics export | Kafka (produce `dfs.telemetry.*`), ClickHouse (HTTPS control path), OTel collector (OTLP) | live (3D ADR-0008; OTLP 3E.2 ADR-0010) |
 
 > **The telemetry seam.** The Ingestion and Warehouse engines emit through

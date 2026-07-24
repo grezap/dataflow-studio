@@ -3,6 +3,7 @@ using System.Text.Json;
 using Avro.Generic;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using DataFlowStudio.SharedKernel.Lineage;
 using DataFlowStudio.SharedKernel.Telemetry;
 using Microsoft.Extensions.Logging;
 using Nexus.Avro;
@@ -26,7 +27,8 @@ namespace DataFlowStudio.Modules.Ingestion.Curation;
 public sealed partial class CurationEngine(
     CurationOptions options,
     ILogger<CurationEngine> logger,
-    IPipelineTelemetrySink telemetry)
+    IPipelineTelemetrySink telemetry,
+    ILineageEmitter lineage)
 {
     private const string PipelineName = "curation";
 
@@ -68,6 +70,13 @@ public sealed partial class CurationEngine(
         var traceId = runActivity?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
         var runStopwatch = Stopwatch.StartNew();
         var lastMessageUtc = DateTime.UtcNow;
+
+        // OpenLineage (E16): this run is the 'curation' job — it reads the raw CDC topics and writes the
+        // curated topics. The runId is the OTel trace id, so the Marquez run == the Tempo trace ==
+        // the ClickHouse pipeline_events for this run. Emission is best-effort (never fails the drain).
+        var rawDatasets = CurationCatalog.All.Select(s => s.RawTopic).ToList();
+        var curatedDatasets = CurationCatalog.All.Select(s => s.CuratedTopic).ToList();
+        await lineage.StartAsync(PipelineName, traceId, rawDatasets, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -119,6 +128,9 @@ public sealed partial class CurationEngine(
         // … then flush telemetry so it lands before the caller inspects the results (None: flush even
         // when the run token is cancelled on shutdown).
         await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // OpenLineage COMPLETE: the curated topics are the run's outputs → the raw → curated lineage edge.
+        await lineage.CompleteAsync(PipelineName, traceId, rawDatasets, curatedDatasets, CancellationToken.None).ConfigureAwait(false);
 
         LogDrained(logger, total);
         return counts;

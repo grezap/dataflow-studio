@@ -203,6 +203,13 @@ Re-query `dwh.dim_customer WHERE customer_code='SEED-C001'` — now **two** rows
 closed (`is_current=0`, `valid_to` stamped) and the new one current. That is the whole point of the
 pipeline: an OLTP edit became a *versioned* warehouse fact, with the history preserved.
 
+**The same run, as lineage (E16).** Those two scripts also emit **OpenLineage** to Marquez — the
+`curation` job (raw `oltp.*` → curated `dfs.*`) and the `warehouse-sink` job (curated → `dwh.*`). Run
+`.\scripts\dfs-lineage-demo.ps1` and open `https://192.168.70.127` (namespace `dataflow-studio`): the
+graph is 2 jobs + 29 datasets, and clicking `oltp.OltpDb.dbo.Customers` shows everything downstream that
+a change to it would touch — the whole curated + DWH layer. And `.\scripts\dfs-trace.ps1`'s Face 5 emits
+a `dfs-trace` job for the single record you traced. Handbook §1.8c.
+
 ---
 
 ## Face 6 — the pipeline watching itself (ClickHouse)
