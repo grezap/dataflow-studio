@@ -1,0 +1,18 @@
+# Keep the build context small + secret-free. The Dockerfile copies only the manifests + src/.
+**/bin/
+**/obj/
+**/.vs/
+.git/
+.github/
+.secrets/
+deploy/secrets/
+**/*.user
+**/.env
+**/.env.*
+!**/.env.example
+docs/
+tests/
+scripts/
+coverage/
+TestResults/
+**/*.md

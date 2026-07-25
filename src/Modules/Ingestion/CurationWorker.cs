@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DataFlowStudio.Modules.Ingestion.Curation;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ namespace DataFlowStudio.Modules.Ingestion;
 /// <c>DataFlowStudio.Curation</c> console drives the same engine in drain mode for demos and the
 /// live source-replay, so there is a single curation code path.
 /// </summary>
+[ExcludeFromCodeCoverage] // Hosted BackgroundService loop — runs the unit-tested engine (ADR-0012).
 public sealed partial class CurationWorker(CurationEngine engine, ILogger<CurationWorker> logger) : BackgroundService
 {
     /// <summary>Runs the curation engine until the host signals shutdown.</summary>

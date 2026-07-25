@@ -43,3 +43,16 @@ jobs:
       # runner's Docker daemon; no DFS_OLTP_TEST_CONNECTION is set in CI).
       - name: Test (incl. E1 up->down->up migration gate)
         run: dotnet test DataFlowStudio.slnx -c Release --no-build --verbosity normal
+
+      # E12 coverage gate: >=80% line AND branch on the hand-written logic assemblies. coverlet.runsettings
+      # excludes generated code (*.g.cs) and the [ExcludeFromCodeCoverage] infrastructure-IO boundaries +
+      # composition roots (ADR-0012); the migration runners + live-IO paths are acceptance-gated above.
+      - name: Coverage gate (>=80% line+branch, logic assemblies)
+        run: |
+          dotnet test tests/DataFlowStudio.UnitTests/DataFlowStudio.UnitTests.csproj -c Release --no-build \
+            --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory ./coverage
+          report=$(find ./coverage -name coverage.cobertura.xml | head -1)
+          line=$(grep -o 'line-rate="[0-9.]*"' "$report" | head -1 | grep -o '[0-9.]*')
+          branch=$(grep -o 'branch-rate="[0-9.]*"' "$report" | head -1 | grep -o '[0-9.]*')
+          echo "Logic coverage: line=$line branch=$branch (gate: >=0.80 each)"
+          awk "BEGIN { if ($line < 0.80 || $branch < 0.80) { print \"FAIL: coverage below 80%\"; exit 1 } print \"PASS\" }"

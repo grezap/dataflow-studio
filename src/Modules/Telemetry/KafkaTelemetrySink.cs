@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
@@ -18,13 +19,7 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// ClickHouse HTTPS inserter (<see cref="ClickHouseErrorSink"/>). An OpenTelemetry counter records
 /// every emit (E16) — inert until an OTLP exporter is wired (the observability tier is off this week).
 /// </summary>
-/// <param name="options">Kafka connection + telemetry settings.</param>
-/// <param name="logger">Diagnostics log.</param>
-/// <param name="errorFallback">The direct-HTTPS error inserter used when the native path fails.</param>
-public sealed partial class KafkaTelemetrySink(
-    TelemetryOptions options,
-    ILogger<KafkaTelemetrySink> logger,
-    ClickHouseErrorSink errorFallback) : IPipelineTelemetrySink, IAsyncDisposable
+public sealed partial class KafkaTelemetrySink : IPipelineTelemetrySink, IAsyncDisposable
 {
     /// <summary>The Meter name the OTLP exporter registers (via the additional-meters list) so the emit counter exports (E16).</summary>
     public const string MeterName = "DataFlowStudio.Telemetry";
@@ -33,21 +28,51 @@ public sealed partial class KafkaTelemetrySink(
     private static readonly Counter<long> EmittedCounter =
         Meter.CreateCounter<long>("dfs.telemetry.emitted", unit: "records", description: "Telemetry records produced, by stream.");
 
-    private readonly IProducer<Null, string> _producer =
-        new ProducerBuilder<Null, string>(KafkaClientFactory.CreateProducerConfig(options.Kafka)).Build();
+    private readonly TelemetryOptions _options;
+    private readonly ILogger<KafkaTelemetrySink> _logger;
+    private readonly IErrorFallbackSink _errorFallback;
+    private readonly IProducer<Null, string> _producer;
     private readonly ConcurrentBag<Task> _pendingFallbacks = [];
+
+    /// <summary>Creates the sink with a live Kafka producer built from the connection options.</summary>
+    /// <param name="options">Kafka connection + telemetry settings.</param>
+    /// <param name="logger">Diagnostics log.</param>
+    /// <param name="errorFallback">The direct-HTTPS error inserter used when the native path fails.</param>
+    public KafkaTelemetrySink(
+        TelemetryOptions options,
+        ILogger<KafkaTelemetrySink> logger,
+        IErrorFallbackSink errorFallback)
+        : this(options, logger, errorFallback,
+            new ProducerBuilder<Null, string>(KafkaClientFactory.CreateProducerConfig(options.Kafka)).Build())
+    {
+    }
+
+    // Seam ctor: the tests inject a recording producer so the dual-path error handling is covered
+    // without a broker. The public ctor supplies the real librdkafka producer.
+    internal KafkaTelemetrySink(
+        TelemetryOptions options,
+        ILogger<KafkaTelemetrySink> logger,
+        IErrorFallbackSink errorFallback,
+        IProducer<Null, string> producer)
+    {
+        _options = options;
+        _logger = logger;
+        _errorFallback = errorFallback;
+        _producer = producer;
+    }
 
     /// <summary>Creates the three <c>dfs.telemetry.*</c> topics (brokers have auto-create off). Idempotent.</summary>
     /// <param name="cancellationToken">Cancels the operation.</param>
+    [ExcludeFromCodeCoverage] // Kafka AdminClient topic creation — requires a live broker.
     public async Task EnsureTopicsAsync(CancellationToken cancellationToken = default)
     {
         var adminConfig = new AdminClientConfig
         {
-            BootstrapServers = options.Kafka.BootstrapServers,
+            BootstrapServers = _options.Kafka.BootstrapServers,
             SecurityProtocol = SecurityProtocol.Ssl,
-            SslCaPem = options.Kafka.CaCertPem,
-            SslCertificatePem = options.Kafka.ClientCertPem,
-            SslKeyPem = options.Kafka.ClientKeyPem,
+            SslCaPem = _options.Kafka.CaCertPem,
+            SslCertificatePem = _options.Kafka.ClientCertPem,
+            SslKeyPem = _options.Kafka.ClientKeyPem,
         };
         using var admin = new AdminClientBuilder(adminConfig).Build();
 
@@ -56,14 +81,14 @@ public sealed partial class KafkaTelemetrySink(
             {
                 Name = name,
                 NumPartitions = 1,
-                ReplicationFactor = options.ReplicationFactor,
+                ReplicationFactor = _options.ReplicationFactor,
             })
             .ToList();
 
         try
         {
             await admin.CreateTopicsAsync(specs).ConfigureAwait(false);
-            LogTopicsEnsured(logger);
+            LogTopicsEnsured(_logger);
         }
         catch (CreateTopicsException e) when (
             e.Results.All(r => r.Error.Code is ErrorCode.TopicAlreadyExists or ErrorCode.NoError))
@@ -104,7 +129,7 @@ public sealed partial class KafkaTelemetrySink(
                 {
                     if (report.Error.IsError)
                     {
-                        _pendingFallbacks.Add(errorFallback.InsertAsync(error));
+                        _pendingFallbacks.Add(_errorFallback.InsertAsync(error));
                     }
                 });
             EmittedCounter.Add(1, new KeyValuePair<string, object?>("stream", "error_events"));
@@ -112,8 +137,8 @@ public sealed partial class KafkaTelemetrySink(
         catch (ProduceException<Null, string> ex)
         {
             // The broker is unreachable (can't even enqueue) — the error is likely ABOUT Kafka. Use HTTPS.
-            LogNativeProduceFailed(logger, ex.Error.Reason);
-            _pendingFallbacks.Add(errorFallback.InsertAsync(error));
+            LogNativeProduceFailed(_logger, ex.Error.Reason);
+            _pendingFallbacks.Add(_errorFallback.InsertAsync(error));
         }
     }
 
@@ -136,7 +161,7 @@ public sealed partial class KafkaTelemetrySink(
         catch (ProduceException<Null, string> ex)
         {
             // Non-error telemetry is best-effort: a produce failure must never disrupt the pipeline.
-            LogNativeProduceFailed(logger, ex.Error.Reason);
+            LogNativeProduceFailed(_logger, ex.Error.Reason);
         }
     }
 
@@ -149,7 +174,7 @@ public sealed partial class KafkaTelemetrySink(
         }
         catch (Exception ex)
         {
-            LogNativeProduceFailed(logger, ex.Message);
+            LogNativeProduceFailed(_logger, ex.Message);
         }
 
         _producer.Dispose();

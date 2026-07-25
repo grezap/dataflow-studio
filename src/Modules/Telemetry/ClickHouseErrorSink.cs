@@ -13,7 +13,7 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// where the worker cannot produce to a broker it can't reach (ADR-0008). Inert (a logged no-op) when
 /// no ClickHouse connection is configured, so a Kafka-only run still works.
 /// </summary>
-public sealed partial class ClickHouseErrorSink(TelemetryOptions options, ILogger<ClickHouseErrorSink> logger)
+public sealed partial class ClickHouseErrorSink(TelemetryOptions options, ILogger<ClickHouseErrorSink> logger) : IErrorFallbackSink
 {
     /// <summary>Whether a ClickHouse connection is configured (the sink is active).</summary>
     public bool IsEnabled => !string.IsNullOrWhiteSpace(options.ClickHouseConnectionString);

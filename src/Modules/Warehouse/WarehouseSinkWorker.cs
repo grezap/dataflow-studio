@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DataFlowStudio.Modules.Warehouse.Sink;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ namespace DataFlowStudio.Modules.Warehouse;
 /// <c>DataFlowStudio.WarehouseSink</c> console drives the same engine once (drain) for demos and the
 /// live load, so there is a single load code path.
 /// </summary>
+[ExcludeFromCodeCoverage] // Hosted BackgroundService timer loop — runs the unit-tested engine (ADR-0012).
 public sealed partial class WarehouseSinkWorker(WarehouseSinkEngine engine, ILogger<WarehouseSinkWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan LoadInterval = TimeSpan.FromMinutes(1);

@@ -1,0 +1,46 @@
+# A one-shot StarRocks DWH migration (DbUp, forward-only + idempotent). Run before the warehouse-sink.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dfs-migrate-starrocks
+  namespace: dataflow-studio
+  labels:
+    app.kubernetes.io/name: dfs-migrate-starrocks
+    app.kubernetes.io/part-of: dataflow-studio
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dfs-migrate-starrocks
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654   # the .NET runtime image's non-root 'app' user ($APP_UID)
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dfs-migrate-starrocks
+          image: dfs-migrate-starrocks:latest
+          env:
+            - name: DFS_STARROCKS_CONNECTION
+              valueFrom:
+                secretKeyRef:
+                  name: dfs-credentials
+                  key: DFS_STARROCKS_CONNECTION
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir: {}

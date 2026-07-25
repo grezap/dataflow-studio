@@ -14,6 +14,12 @@
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The DWH load orchestration (LoadStarAsync) is internal so it stays a sink implementation
+         detail, but is exercised directly by the unit tests against a recording IStarRocksClient. -->
+    <InternalsVisibleTo Include="DataFlowStudio.UnitTests" />
+  </ItemGroup>
+
   <ItemGroup Label="nexus-shared — consume curated Avro from Kafka (E8)">
     <PackageReference Include="Nexus.Primitives" />
     <PackageReference Include="Nexus.Kafka" />

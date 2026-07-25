@@ -1,0 +1,126 @@
+# DataFlow Studio — application tier.
+#
+# This composes the DataFlow Studio *processes* (the Api + the pipeline jobs). The data platform it talks
+# to — SQL Server AG, Kafka, Schema Registry, StarRocks, ClickHouse, the OTLP collector, Marquez — is the
+# lab (or your own cluster); point the DFS_* variables at it via a .env file (see .env.example).
+#
+# Build every image (shared deploy/Dockerfile, one per service via build args):
+#   DOCKER_BUILDKIT=1 GITHUB_PACKAGES_TOKEN=$(gh auth token) docker compose -f deploy/docker-compose.yml build
+# Run the Api:                docker compose -f deploy/docker-compose.yml up dfs-api
+# Run a pipeline job on demand: docker compose -f deploy/docker-compose.yml --profile jobs run --rm dfs-curation
+# Migrate a sink:               docker compose -f deploy/docker-compose.yml --profile migrate run --rm migrate-starrocks
+
+name: dataflow-studio
+
+secrets:
+  github_packages_token:
+    environment: GITHUB_PACKAGES_TOKEN
+
+x-build: &build
+  context: ..
+  dockerfile: deploy/Dockerfile
+  secrets: [github_packages_token]
+
+# The Kafka mTLS PEMs the workers read are issued from Vault per run; mount the directory holding them and
+# point DFS_KAFKA_CA/CERT/KEY at the in-container paths.
+x-pipeline-env: &pipeline-env
+  DFS_SQL_CONN: ${DFS_SQL_CONN:-}
+  DFS_KAFKA_BOOTSTRAP: ${DFS_KAFKA_BOOTSTRAP:-}
+  DFS_KAFKA_CA: ${DFS_KAFKA_CA:-/secrets/kafka-ca.pem}
+  DFS_KAFKA_CERT: ${DFS_KAFKA_CERT:-/secrets/kafka-cert.pem}
+  DFS_KAFKA_KEY: ${DFS_KAFKA_KEY:-/secrets/kafka-key.pem}
+  DFS_SR_URL: ${DFS_SR_URL:-}
+  DFS_STARROCKS_CONNECTION: ${DFS_STARROCKS_CONNECTION:-}
+  DFS_CLICKHOUSE_CONNECTION: ${DFS_CLICKHOUSE_CONNECTION:-}
+  DFS_OTLP_ENDPOINT: ${DFS_OTLP_ENDPOINT:-}
+  DFS_MARQUEZ_ENDPOINT: ${DFS_MARQUEZ_ENDPOINT:-}
+
+services:
+  dfs-api:
+    image: dfs-api:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Api/DataFlowStudio.Api.csproj
+        ENTRY_DLL: DataFlowStudio.Api.dll
+    environment:
+      <<: *pipeline-env
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./secrets:/secrets:ro
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  dfs-seed:
+    profiles: [jobs]
+    image: dfs-seed:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Seed/DataFlowStudio.Seed.csproj
+        ENTRY_DLL: DataFlowStudio.Seed.dll
+    environment: *pipeline-env
+    volumes:
+      - ./secrets:/secrets:ro
+
+  dfs-curation:
+    profiles: [jobs]
+    image: dfs-curation:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Curation/DataFlowStudio.Curation.csproj
+        ENTRY_DLL: DataFlowStudio.Curation.dll
+    environment: *pipeline-env
+    volumes:
+      - ./secrets:/secrets:ro
+
+  dfs-warehouse-sink:
+    profiles: [jobs]
+    image: dfs-warehouse-sink:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.WarehouseSink/DataFlowStudio.WarehouseSink.csproj
+        ENTRY_DLL: DataFlowStudio.WarehouseSink.dll
+    environment: *pipeline-env
+    volumes:
+      - ./secrets:/secrets:ro
+
+  migrate-oltp:
+    profiles: [migrate]
+    image: dfs-migrate-oltp:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Migrations.Oltp/DataFlowStudio.Migrations.Oltp.csproj
+        ENTRY_DLL: DataFlowStudio.Migrations.Oltp.dll
+    environment:
+      DFS_OLTP_CONNECTION: ${DFS_OLTP_CONNECTION:-}
+
+  migrate-starrocks:
+    profiles: [migrate]
+    image: dfs-migrate-starrocks:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Migrations.Starrocks/DataFlowStudio.Migrations.Starrocks.csproj
+        ENTRY_DLL: DataFlowStudio.Migrations.Starrocks.dll
+    environment:
+      DFS_STARROCKS_CONNECTION: ${DFS_STARROCKS_CONNECTION:-}
+
+  migrate-clickhouse:
+    profiles: [migrate]
+    image: dfs-migrate-clickhouse:latest
+    build:
+      <<: *build
+      args:
+        PROJECT: src/DataFlowStudio.Migrations.Clickhouse/DataFlowStudio.Migrations.Clickhouse.csproj
+        ENTRY_DLL: DataFlowStudio.Migrations.Clickhouse.dll
+    environment:
+      DFS_CLICKHOUSE_CONNECTION: ${DFS_CLICKHOUSE_CONNECTION:-}

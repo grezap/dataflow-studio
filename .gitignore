@@ -26,7 +26,18 @@ node_modules/
 appsettings.*.local.json
 .env
 .env.*
+!.env.example
 .secrets/
+# Docker/K8s deploy secrets — the Vault-issued Kafka mTLS PEMs mounted into containers
+deploy/secrets/
+
+# Python (pyspark/ conformance job)
+.venv/
+__pycache__/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # OS
 .DS_Store

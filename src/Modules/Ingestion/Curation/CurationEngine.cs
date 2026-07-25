@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Avro.Generic;
 using Confluent.Kafka;
@@ -39,6 +40,10 @@ public sealed partial class CurationEngine(
     /// </summary>
     /// <param name="drainMode">True to stop when the raw snapshot is fully consumed; false to run until cancelled.</param>
     /// <param name="cancellationToken">Stops the loop (host shutdown).</param>
+    // Kafka consume/produce orchestration — requires a live broker + Schema Registry; exercised by the
+    // live source-replay (handbook §1) not unit tests. The per-record decision logic it drives is
+    // covered via TryCurateAsync (ADR-0012).
+    [ExcludeFromCodeCoverage]
     public async Task<IReadOnlyDictionary<string, int>> RunAsync(bool drainMode, CancellationToken cancellationToken)
     {
         await EnsureCuratedTopicsAsync().ConfigureAwait(false);
@@ -136,7 +141,7 @@ public sealed partial class CurationEngine(
         return counts;
     }
 
-    private async Task<bool> TryCurateAsync(
+    internal async Task<bool> TryCurateAsync(
         IProducer<string, GenericRecord> producer,
         ConsumeResult<string, string> result,
         Dictionary<string, int> counts,
@@ -217,6 +222,7 @@ public sealed partial class CurationEngine(
         telemetry.RecordError(new PipelineError(
             DateTimeOffset.UtcNow, traceId, PipelineName, errorCode, ex.Message, ex.StackTrace ?? string.Empty));
 
+    [ExcludeFromCodeCoverage] // Kafka AdminClient topic creation — requires a live broker.
     private async Task EnsureCuratedTopicsAsync()
     {
         var adminConfig = new AdminClientConfig

@@ -6,6 +6,56 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Portfolio walkthrough + recording (Week 4)
+
+- **[`docs/demo.md`](docs/demo.md)** — a five-minute persona tour of v0.1.0 (one solution → tested to the
+  E12 gate → orchestrated by Aspire → packaged as containers → the three self-observation planes), and
+  **[`scripts/demo.tape`](scripts/demo.tape)** — the [VHS](https://github.com/charmbracelet/vhs) script
+  that records it to `docs/media/dataflow-studio-demo.gif`. Extends the demo-playbook canon (System-A
+  persona; the runnable `scripts/dfs-*.ps1` + handbook playbooks remain the System-B replay).
+
+### Added — Container packaging: Docker, docker-compose, Kubernetes (Week 4)
+
+- **`deploy/`** packages every runnable host three ways. One parameterized multi-stage `Dockerfile`
+  (SDK → publish → aspnet runtime) builds each image via `PROJECT` / `ENTRY_DLL` build args; images run
+  **non-root** (the runtime image's uid 1654) and restore the `Nexus.*` feed via a **BuildKit secret**
+  (never baked into a layer). `.dockerignore` keeps the context small + secret-free.
+- **`docker-compose.yml`** — the Api (default) plus the pipeline jobs (`--profile jobs`) and the
+  migrations (`--profile migrate`), mirroring the Aspire explicit-start ordering; `.env.example` documents
+  the `DFS_*` wiring and the Kafka mTLS PEM mount.
+- **`k8s/`** — namespace, ConfigMap (endpoints), a Secret example (shape only), the Api `Deployment` +
+  `Service` with `/health` liveness/readiness probes, and one-shot `Job`s (curation drain, StarRocks
+  migration). Every workload is non-root, read-only root filesystem (+ a writable `/tmp`),
+  `allowPrivilegeEscalation: false`, all capabilities dropped. `kubectl apply -k deploy/k8s`.
+- **Validated locally:** the Api image builds + runs + serves `/health` (`{"status":"healthy",
+  "moduleCount":4}`) and `/modules`; a console image builds via `docker compose build`; `kubectl kustomize`
+  builds all seven objects. Gotcha found + fixed: the Dockerfile must copy `.editorconfig` or a newer
+  base-image SDK applies stricter analyzer defaults and fails the warnings-as-errors build (CA1716).
+
+### Added — .NET Aspire AppHost for local orchestration (Week 4, ADR-0013)
+
+- **`DataFlowStudio.AppHost`** (.NET Aspire 13.4.6) composes the Api (always-on) with every pipeline
+  console — `dfs-seed`, `dfs-curation`, `dfs-warehouse-sink`, `dfs-trace`, `dfs-telemetry-verify` — as
+  first-class, **explicit-start** resources. `dotnet run --project src/DataFlowStudio.AppHost` brings up
+  the Aspire dashboard with the whole topology, per-resource logs, and the Api's endpoints; the `DFS_*`
+  environment is forwarded to every resource. Module isolation + no-EF-on-AOT (ADR-0007) are untouched —
+  the AppHost only orchestrates the existing projects.
+
+### Added — Test coverage to the E12 gate (Week 4, ADR-0012)
+
+- **Coverage gate: ≥80% line and branch on the logic assemblies, enforced in CI.** Logic coverage is now
+  **93% line / 85% branch** (≥80/80 on every logic assembly). The unit suite grew from 31 to **102 tests**
+  (+6 architecture, +3 container gates).
+- **DIP seams so the pipeline logic is unit-testable without live infrastructure** (all genuine design
+  improvements): `IStarRocksClient` (the SCD2 dimension + fact loaders and `WarehouseSinkEngine.LoadStarAsync`
+  now test against a recording fake), `IErrorFallbackSink` + an internal producer constructor on
+  `KafkaTelemetrySink` (the native/fallback dual path), an injectable `HttpMessageHandler` on
+  `MarquezLineageEmitter` (the OpenLineage event shape), and an internal `CurationEngine.TryCurateAsync`
+  (the per-record parse → project → produce path).
+- **`coverlet.runsettings`** excludes generated code (`*.g.cs` — the JSON/`LoggerMessage` source-gen) and
+  auto-props; infrastructure-IO boundaries + composition roots are marked `[ExcludeFromCodeCoverage]` with
+  a per-item justification (they are covered by the container gates + the live replay, not unit tests).
+
 ### Added — OpenLineage emission to Marquez (E16, ADR-0011, Week-3 Session 3F)
 
 - **The pipeline now emits data lineage.** A new `DataFlowStudio.Lineage` library + an `ILineageEmitter`

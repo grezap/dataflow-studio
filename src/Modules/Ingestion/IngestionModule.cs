@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DataFlowStudio.Modules.Ingestion.Curation;
 using DataFlowStudio.SharedKernel;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +13,7 @@ namespace DataFlowStudio.Modules.Ingestion;
 /// another module — the raw/curated contract is Kafka + Avro (enforced by the architecture tests).
 /// Non-AOT (ADR-0003/0007) but no EF Core.
 /// </summary>
+[ExcludeFromCodeCoverage] // DI composition root — wiring only; the wired components are unit-tested (ADR-0012).
 public sealed class IngestionModule : IModule
 {
     /// <inheritdoc />

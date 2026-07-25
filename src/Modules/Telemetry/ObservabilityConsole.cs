@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Configuration;
 using Nexus.Observability;
 using OpenTelemetry;
@@ -15,6 +16,9 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// the last metric collection. When <c>DFS_OTLP_ENDPOINT</c> is unset, <see cref="TryStart"/> returns
 /// <see langword="null"/> and the run proceeds with no export overhead.
 /// </summary>
+// Console OTel provider host — builds live TracerProvider/MeterProvider for export; the testable
+// wiring decision lives in ObservabilityWiring (ADR-0012).
+[ExcludeFromCodeCoverage]
 public sealed class ObservabilityConsole : IDisposable
 {
     private readonly TracerProvider _tracerProvider;

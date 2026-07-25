@@ -434,12 +434,26 @@ and curated Kafka topics, and the DWH all survive a power-off and resume on powe
 | Week 2 — CDC → Kafka: Debezium raw → curated Avro · 5-face trace | ✅ live |
 | Week 3A — DbUp sink schema (StarRocks + ClickHouse) | ✅ live |
 | Week 3B — curation for all 10 order-flow entities · seed tool | ✅ live |
-| Week 3E.2 — OpenTelemetry OTLP export (spans → Tempo, metrics → Prometheus) | ✅ live |
-| Week 3F — OpenLineage emission → Marquez (raw → curated → DWH lineage graph) | ✅ live |
 | Week 3C — StarRocks DWH sink (SCD2 dims + facts) | ✅ live |
 | Week 3D — ClickHouse telemetry sink (Kafka-engine native) | ✅ live |
-| Week 3E — Marquez (OpenLineage) + observability tier | ⏳ next |
-| Week 3F — `dfs trace` Face 5 real · Week-3 PR | ⏳ |
+| Week 3E.2 — OpenTelemetry OTLP export (spans → Tempo, metrics → Prometheus) | ✅ live |
+| Week 3F — OpenLineage emission → Marquez (raw → curated → DWH lineage graph) · Face 5 real | ✅ live |
+| Week 4 — coverage to 80% (E12) · Aspire AppHost · Docker/compose/Swarm/K8s · PySpark silver job · `nexus-cli deploy` · §6 gate | ✅ **v0.1.0** |
+
+### 2.1 Week-4 deliverables (orchestrate · package · conform · gate)
+
+- **Tests → the E12 gate.** 113 tests; logic coverage **93% line / 85% branch** (≥80/80 per assembly),
+  CI-enforced. Loaders/sinks/emitters test through DIP seams (`IStarRocksClient`, `IErrorFallbackSink`,
+  injectable producer + HTTP handler) — [ADR-0012](adr/ADR-0012-test-coverage-strategy.md).
+- **Orchestrate.** `.NET Aspire` AppHost composes the Api + the five pipeline consoles — `dotnet run
+  --project src/DataFlowStudio.AppHost` ([ADR-0013](adr/ADR-0013-aspire-apphost-orchestration.md)).
+- **Package.** One parameterized `Dockerfile` (non-root) + `docker-compose.yml` + Swarm `stack.yml` +
+  `k8s/` manifests — see [`deploy/`](../deploy/README.md). `nexus-cli deploy dataflow-studio` plans the
+  end-to-end deploy.
+- **Conform (Python).** `pyspark/` conforms the gold star into a `customer_360` silver mart — ruff +
+  mypy `--strict`, tested on a local SparkSession ([ADR-0014](adr/ADR-0014-pyspark-silver-conformance.md)).
+- **Demo.** [`demo.md`](demo.md) walkthrough + `scripts/demo.tape` (VHS, rendered in CI) +
+  `docs/demos/DEMO-01-cdc-to-dwh.md` (also `nexus-cli demo run DEMO-DFS-01`).
 
 ---
 
@@ -547,3 +561,46 @@ before touching the lab, and fixed in `schemas/dataflow-studio/README.md`):
   the warehouse-sink OTLP run is script-supported (`dfs-otel-demo.ps1 -IncludeWarehouseSink`) but was
   not live-run in 3E.2 (the StarRocks tier was left down for minimal-running-VMs); its spans use the
   identical `DataflowActivity` seam proven by the curation drain.
+
+### 3.4 🔴 Panic button — stop the pipeline now
+
+When a run is misbehaving (a bad curation reshaping the world, a load corrupting the star, telemetry
+flooding), stop the flow first, then diagnose. The pipeline is designed so a hard stop is safe: every
+domain-data load is idempotent, so nothing is left half-applied.
+
+**1. Cut the source — pause CDC so nothing new arrives.** From a Kafka Connect node:
+
+```bash
+# Pause (reversible — keeps offsets); resume later with .../resume.
+curl -sk -X PUT https://localhost:8083/connectors/oltp-cdc/pause
+```
+
+**2. Stop the workers.**
+
+- **Consoles (drain/demo):** `Ctrl+C` — the engines flush telemetry + close the consumer cleanly.
+- **Api-hosted workers (compose):** `docker compose -f deploy/docker-compose.yml stop dfs-api`.
+- **Swarm:** `docker service scale dataflow-studio_dfs-api=0` (or `docker stack rm dataflow-studio`).
+- **Kubernetes:** `kubectl -n dataflow-studio scale deploy/dfs-api --replicas=0`; kill a running
+  job with `kubectl -n dataflow-studio delete job/dfs-curation`.
+
+**3. Undo a bad load.** Nothing is half-applied — re-run with corrected data to converge:
+
+- **Facts** are truncate-and-reload — re-running the warehouse-sink drain reloads the current snapshot.
+- **SCD2 dimensions** — a wrongly-inserted version is closed in place:
+  `UPDATE dwh.dim_customer SET is_current = 0, valid_to = now() WHERE customer_sk = <bad_sk>;`
+  then re-run the sink so the correct current version is re-established.
+- **ClickHouse telemetry** is append-only (ADR-0008) — it is observability, not domain data; a bad
+  batch is tolerated (dedupe in queries by `trace_id`), not rolled back.
+
+**4. Bad schema migration.**
+
+- **OltpDb** (FluentMigrator) is reversible: `dotnet run --project src/DataFlowStudio.Migrations.Oltp -- down`.
+- **StarRocks / ClickHouse** (DbUp) are forward-only → restore the tier from its last backup
+  (`nexus-cli backup restore starrocks|clickhouse ...`) or drop the affected objects and re-migrate.
+
+**5. Full stop (containers).** `docker compose -f deploy/docker-compose.yml down` ·
+`docker stack rm dataflow-studio` · `kubectl delete -k deploy/k8s`. The lab data tiers are unaffected —
+they are separate infrastructure.
+
+After the incident: **resume CDC** (`.../resume`), restart the workers, and confirm the star + telemetry
+reconverge (§1.8, §1.8a).

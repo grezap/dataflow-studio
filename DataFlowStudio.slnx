@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/DataFlowStudio.AppHost/DataFlowStudio.AppHost.csproj" />
     <Project Path="src/DataFlowStudio.Api/DataFlowStudio.Api.csproj" />
     <Project Path="src/DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
     <Project Path="src/DataFlowStudio.Clickhouse/DataFlowStudio.Clickhouse.csproj" />
@@ -20,6 +21,7 @@
     <Project Path="src/Modules/Telemetry/DataFlowStudio.Modules.Telemetry.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/DataFlowStudio.Api.Tests/DataFlowStudio.Api.Tests.csproj" />
     <Project Path="tests/DataFlowStudio.Architecture.Tests/DataFlowStudio.Architecture.Tests.csproj" />
     <Project Path="tests/DataFlowStudio.Migrations.Tests/DataFlowStudio.Migrations.Tests.csproj" />
     <Project Path="tests/DataFlowStudio.UnitTests/DataFlowStudio.UnitTests.csproj" />

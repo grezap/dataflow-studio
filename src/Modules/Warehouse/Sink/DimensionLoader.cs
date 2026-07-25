@@ -11,7 +11,7 @@ namespace DataFlowStudio.Modules.Warehouse.Sink;
 /// batching is required, not just an optimisation. Idempotent: SCD2 inserts a new version only when
 /// the tracked attributes actually change, so a re-run with the same data is a no-op.
 /// </summary>
-public sealed class DimensionLoader(StarRocksClient client)
+public sealed class DimensionLoader(IStarRocksClient client)
 {
     private const string ValidToMax = "9999-12-31 00:00:00";
 

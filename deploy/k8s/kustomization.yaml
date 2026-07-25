@@ -1,0 +1,14 @@
+# kubectl apply -k deploy/k8s   — the always-on tier (namespace, config, secret, Api).
+# The Jobs (curation drain, migrations) are applied on demand, not part of the base kustomization.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.example.yaml   # replace with your real, out-of-band Secret (do not commit credentials)
+  - api-deployment.yaml
+
+images:
+  - name: dfs-api
+    newTag: latest

@@ -25,11 +25,24 @@ public sealed partial class MarquezLineageEmitter : ILineageEmitter, IDisposable
     /// <param name="options">Endpoint, namespace, producer, and private-CA trust.</param>
     /// <param name="logger">Diagnostics log for best-effort emit failures.</param>
     public MarquezLineageEmitter(LineageEmitterOptions options, ILogger<MarquezLineageEmitter> logger)
+        : this(options, logger, BuildHandler(options))
+    {
+    }
+
+    // Seam ctor: the tests inject a stub HttpMessageHandler so the OpenLineage event shape + best-effort
+    // error handling are covered without a live Marquez. The public ctor supplies the real private-CA
+    // pinning handler.
+    internal MarquezLineageEmitter(LineageEmitterOptions options, ILogger<MarquezLineageEmitter> logger, HttpMessageHandler handler)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
         _logger = logger;
+        _http = new HttpClient(handler) { BaseAddress = options.Endpoint, Timeout = TimeSpan.FromSeconds(20) };
+    }
 
+    private static HttpClientHandler BuildHandler(LineageEmitterOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
         var handler = new HttpClientHandler();
         if (options.ServerCaCertificates is { Count: > 0 } roots)
         {
@@ -37,7 +50,7 @@ public sealed partial class MarquezLineageEmitter : ILineageEmitter, IDisposable
                 ValidateServerCertificate(cert, chain, errors, roots);
         }
 
-        _http = new HttpClient(handler) { BaseAddress = options.Endpoint, Timeout = TimeSpan.FromSeconds(20) };
+        return handler;
     }
 
     /// <inheritdoc />
@@ -96,6 +109,8 @@ public sealed partial class MarquezLineageEmitter : ILineageEmitter, IDisposable
     // Accept the front door's leaf iff it chains to one of the supplied private roots and the endpoint's
     // host still matches a SAN. Overrides only the "untrusted root" verdict (the lab CA isn't in the OS
     // store); a name mismatch or a missing certificate is still fatal. Mirrors Nexus.Observability.
+    // Only ever invoked during a live TLS handshake → exercised against the lab Marquez, not unit tests (ADR-0012).
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     private static bool ValidateServerCertificate(
         X509Certificate2? certificate,
         X509Chain? presentedChain,

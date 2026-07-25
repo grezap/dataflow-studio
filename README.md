@@ -15,14 +15,17 @@ DataFlow Studio is the first application project built **on** the NexusPlatform 
 provisioning it. It demonstrates a production-shaped change-data-capture pipeline end to end, with
 enforced architecture boundaries, reversible database migrations, and first-class observability.
 
+> **New here?** Start with the [portfolio walkthrough](docs/demo.md) (five-minute tour), then the
+> [pipeline replay](docs/demos/watch-the-pipeline.md).
+
 ## 2. What it demonstrates — the four skill dimensions
 
 | Dimension | In this project |
 |---|---|
 | **.NET engineering + architecture** | Modular monolith with module boundaries enforced by NetArchTest ([ADR-0001](docs/adr/ADR-0001-modular-monolith.md)); Dapper + raw SQL with **no EF Core** on the CDC + migration paths, enforced by the architecture tests ([ADR-0002](docs/adr/ADR-0002-dapper-fluentmigrator-on-aot-paths.md), [ADR-0007](docs/adr/ADR-0007-data-driven-curation-catalog.md)). |
 | **Advanced SQL + analytics** | Temporal tables, persisted computed columns, `ROWVERSION` concurrency, Kimball star schema, ClickHouse aggregating MVs. See [`docs/sql-showcase.md`](docs/sql-showcase.md). |
-| **Python** | *(Week 3+)* PySpark / analytics tooling where applicable per the grid. |
-| **DevOps literacy** | Operated via `nexus-cli`; deploy + migration gate automated; runbook with panic button. |
+| **Python** | A **PySpark** silver-layer job ([`pyspark/`](pyspark/README.md), [ADR-0014](docs/adr/ADR-0014-pyspark-silver-conformance.md)) conforms the gold Kimball star into a `customer_360` mart; modern toolchain (uv + Ruff + mypy `--strict` + Pydantic v2), tested on a local SparkSession. |
+| **DevOps literacy** | `.NET Aspire` AppHost ([ADR-0013](docs/adr/ADR-0013-aspire-apphost-orchestration.md)); container packaging (Docker + compose + Swarm + K8s, [`deploy/`](deploy/README.md)); `nexus-cli deploy dataflow-studio`; migration gate; three observation planes; runbook with panic button. |
 
 ## 3. Architecture
 
@@ -77,14 +80,24 @@ dotnet run --project src/DataFlowStudio.Api
 # GET /health   GET /modules   GET /openapi/v1.json (Development)
 ```
 
+Or bring up the whole thing under the **.NET Aspire dashboard** — the Api plus every pipeline console as
+a first-class resource ([ADR-0013](docs/adr/ADR-0013-aspire-apphost-orchestration.md)):
+
+```bash
+dotnet run --project src/DataFlowStudio.AppHost
+# opens the Aspire dashboard: dfs-api (always-on) + dfs-{seed,curation,warehouse-sink,trace,telemetry-verify}
+# (start-on-demand). The DFS_* env you set is forwarded to every resource.
+```
+
 ## 7. Project structure
 
 ```
-src/     Api · SharedKernel · Clickhouse · Migrations.{Oltp,Starrocks,Clickhouse}
+src/     Api · AppHost (Aspire) · SharedKernel · Clickhouse · Lineage · Migrations.{Oltp,Starrocks,Clickhouse}
          Modules/{Commerce,Ingestion,Warehouse,Telemetry}
          Seed · Curation · WarehouseSink · Trace · Telemetry   (runnable consoles)
-tests/   Architecture.Tests (NetArchTest) · Migrations.Tests (E1 gates) · UnitTests
+tests/   Architecture.Tests (NetArchTest) · Migrations.Tests (E1 gates) · UnitTests · Api.Tests (boot-smoke)
 docs/    handbook.md (from-zero replay) · adr/ · demos/ · sql-showcase.md · api/{openapi,asyncapi}.yaml
+deploy/  Dockerfiles · docker-compose.yml · k8s/ manifests
 scripts/ dfs-seed · dfs-curate · dfs-warehouse-sink · dfs-trace · dfs-telemetry
 ```
 
@@ -108,8 +121,11 @@ Connection strings and secrets are injected at deploy time by the Vault Agent
 ## 10. Testing
 
 xUnit + [Shouldly](https://github.com/shouldly/shouldly) (unit) · NetArchTest (architecture) ·
-Testcontainers (integration — real SQL Server; real Kafka/StarRocks/ClickHouse in later weeks).
-Coverage gate: 80% application layer (E12) — enforced from Week 4.
+Testcontainers (integration — real SQL Server / StarRocks / ClickHouse). **102 unit + 6 architecture +
+3 container-gate tests.** Coverage gate: **≥80% line and branch** on the logic assemblies (E12), enforced
+in CI — currently **93% line / 85% branch**. The loaders, sinks, and emitters are unit-tested through DIP
+seams rather than live infrastructure; generated code + IO/composition boundaries are excluded per
+[ADR-0012](docs/adr/ADR-0012-test-coverage-strategy.md).
 
 > Shouldly rather than FluentAssertions: FA v8+ is proprietary (commercial use needs a paid licence)
 > and v7 is Apache-2.0 but critical-fixes-only. Shouldly is MIT and independently maintained, so

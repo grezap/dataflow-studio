@@ -1,0 +1,68 @@
+# DataFlow Studio — Docker Swarm stack (docker stack deploy). Unlike docker-compose.yml this references
+# pre-built, pushed images (Swarm does not build) and uses Swarm `deploy:`, `configs:`, and `secrets:`.
+#
+# Prereqs — the Kafka mTLS PEMs (path-based, read by the app) are Swarm secrets; the connection strings
+# are interpolated from the deploying shell's environment so they never land in this committed file.
+#   docker secret create kafka-ca   ./deploy/secrets/kafka-ca.pem
+#   docker secret create kafka-cert ./deploy/secrets/kafka-cert.pem
+#   docker secret create kafka-key  ./deploy/secrets/kafka-key.pem
+#   export DFS_SQL_CONN='...'  DFS_STARROCKS_CONNECTION='...'  DFS_CLICKHOUSE_CONNECTION='...'
+#
+# Build + push the image, then:  docker stack deploy -c deploy/stack.yml dataflow-studio
+# One-shot jobs run outside the stack:
+#   docker service create --restart-condition none --secret ... --env ... <registry>/dfs-curation:latest
+
+version: "3.9"
+
+services:
+  dfs-api:
+    image: ${DFS_REGISTRY:-}dfs-api:latest
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: start-first
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 192M
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Endpoints (non-secret) come from the config; secrets are projected under /run/secrets/.
+      DFS_KAFKA_BOOTSTRAP: "192.168.10.21:9092,192.168.10.22:9092,192.168.10.23:9092"
+      DFS_SR_URL: "https://192.168.10.91:8081"
+      DFS_OTLP_ENDPOINT: "https://192.168.70.182:4318"
+      DFS_MARQUEZ_ENDPOINT: "https://192.168.70.127"
+      DFS_KAFKA_CA: /run/secrets/kafka-ca
+      DFS_KAFKA_CERT: /run/secrets/kafka-cert
+      DFS_KAFKA_KEY: /run/secrets/kafka-key
+      # Interpolated from the deploying shell (never committed):
+      DFS_SQL_CONN: ${DFS_SQL_CONN:-}
+      DFS_STARROCKS_CONNECTION: ${DFS_STARROCKS_CONNECTION:-}
+      DFS_CLICKHOUSE_CONNECTION: ${DFS_CLICKHOUSE_CONNECTION:-}
+    secrets:
+      - kafka-ca
+      - kafka-cert
+      - kafka-key
+    ports:
+      - target: 8080
+        published: 8080
+        mode: ingress
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+secrets:
+  kafka-ca:
+    external: true
+  kafka-cert:
+    external: true
+  kafka-key:
+    external: true

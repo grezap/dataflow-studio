@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using MySqlConnector;
 
@@ -8,7 +9,11 @@ namespace DataFlowStudio.Modules.Warehouse.Sink;
 /// connection for the loader run and exposes the few primitives the dimension/fact loaders need:
 /// execute a statement, read a scalar, and read a key→value lookup map. No EF Core (ADR-0007).
 /// </summary>
-public sealed class StarRocksClient(string connectionString) : IAsyncDisposable
+// Thin MySQL-wire driver wrapper (the IStarRocksClient impl) — requires a live StarRocks FE; exercised
+// by the live load + Testcontainers migration gate, not unit tests. The loaders' logic is covered
+// against the IStarRocksClient seam (ADR-0012).
+[ExcludeFromCodeCoverage]
+public sealed class StarRocksClient(string connectionString) : IStarRocksClient
 {
     private MySqlConnection? _connection;
 
