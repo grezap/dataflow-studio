@@ -18,4 +18,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The HttpMessageHandler-seam constructor is internal, exercised by the unit tests (OpenLineage
+         event shape + best-effort error handling) against a stub handler. -->
+    <InternalsVisibleTo Include="DataFlowStudio.UnitTests" />
+  </ItemGroup>
+
 </Project>

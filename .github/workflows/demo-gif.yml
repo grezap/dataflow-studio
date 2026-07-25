@@ -1,0 +1,52 @@
+name: demo-gif
+
+# Auto-recording (§6 #17): render the portfolio walkthrough (scripts/demo.tape) to a GIF with VHS,
+# reproducibly in CI. Runs on demand + when the tape changes; publishes the GIF as an artifact.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/demo.tape", ".github/workflows/demo-gif.yml"]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore + build (so the tape's dotnet steps are fast)
+        run: |
+          dotnet restore DataFlowStudio.slnx
+          dotnet build DataFlowStudio.slnx -c Release --no-restore
+
+      - name: Build the Api image (the tape's `docker run` uses it)
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            --secret id=github_packages_token,env=GITHUB_PACKAGES_TOKEN \
+            --build-arg PROJECT=src/DataFlowStudio.Api/DataFlowStudio.Api.csproj \
+            --build-arg ENTRY_DLL=DataFlowStudio.Api.dll \
+            -f deploy/Dockerfile -t dfs-api:latest .
+
+      - name: Render the tape to a GIF
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: scripts/demo.tape
+
+      - name: Upload the GIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataflow-studio-demo-gif
+          path: docs/media/dataflow-studio-demo.gif
+          if-no-files-found: warn

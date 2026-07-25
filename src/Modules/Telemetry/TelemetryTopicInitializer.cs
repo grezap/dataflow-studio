@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Hosting;
 
 namespace DataFlowStudio.Modules.Telemetry;
@@ -7,6 +8,7 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// workers begin producing telemetry (the brokers have auto-create off). The runnable consoles ensure
 /// topics themselves via <see cref="TelemetrySinkFactory"/>; this covers the Api-hosted path.
 /// </summary>
+[ExcludeFromCodeCoverage] // Hosted startup task — delegates to the (excluded) Kafka admin call (ADR-0012).
 public sealed class TelemetryTopicInitializer(KafkaTelemetrySink sink) : IHostedService
 {
     /// <summary>Ensures the telemetry topics on host start.</summary>

@@ -1,0 +1,56 @@
+# A one-shot curation drain: consume the raw Debezium topics → produce curated Avro, then exit.
+# Re-run with:  kubectl -n dataflow-studio create -f job-curation.yaml   (or `kubectl replace --force`).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dfs-curation
+  namespace: dataflow-studio
+  labels:
+    app.kubernetes.io/name: dfs-curation
+    app.kubernetes.io/part-of: dataflow-studio
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dfs-curation
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654   # the .NET runtime image's non-root 'app' user ($APP_UID)
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dfs-curation
+          image: dfs-curation:latest
+          envFrom:
+            - configMapRef:
+                name: dfs-endpoints
+            - secretRef:
+                name: dfs-credentials
+          volumeMounts:
+            - name: kafka-mtls
+              mountPath: /secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: "100m", memory: "192Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: kafka-mtls
+          secret:
+            secretName: dfs-credentials
+            items:
+              - { key: kafka-ca.pem, path: kafka-ca.pem }
+              - { key: kafka-cert.pem, path: kafka-cert.pem }
+              - { key: kafka-key.pem, path: kafka-key.pem }
+        - name: tmp
+          emptyDir: {}

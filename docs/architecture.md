@@ -237,6 +237,11 @@ The architecture is not a suggestion — it is enforced so it cannot silently er
   another module or the host, or if an AOT path references EF Core. ([ADR-0001](adr/ADR-0001-modular-monolith.md), [ADR-0002](adr/ADR-0002-dapper-fluentmigrator-on-aot-paths.md))
 - **Reversible schema** — the **E1 gate** runs migrations `up → down → up` on a fresh SQL Server in
   CI (Testcontainers) and locally (LocalDB). ([Migrations.Tests](../tests/DataFlowStudio.Migrations.Tests/OltpMigrationUpDownUpTests.cs))
+- **Coverage (E12)** — the **Coverage gate** fails CI below **80% line and branch** on the hand-written
+  logic assemblies (`coverlet.runsettings` excludes generated code + the `[ExcludeFromCodeCoverage]`
+  IO/composition boundaries — [ADR-0012](adr/ADR-0012-test-coverage-strategy.md)). Logic coverage is
+  **93% line / 85% branch** (≥80/80 on every logic assembly); the loaders/sinks/emitters are unit-tested
+  through DIP seams (`IStarRocksClient`, `IErrorFallbackSink`, an injectable producer + HTTP handler).
 - **Documentation** — `GenerateDocumentationFile` is on for `src`, so every public member without an
   XML `<summary>` is a **CS1591 error** under warnings-as-errors. Undocumented public API cannot
   merge.
@@ -248,7 +253,8 @@ flowchart LR
     BUILD --> FMT[dotnet format<br/>--verify-no-changes]
     FMT --> ARCH[Architecture tests<br/>boundaries + no-EF-on-AOT]
     ARCH --> E1[E1 gate<br/>up → down → up<br/>fresh SQL container]
-    E1 --> GREEN{all green?}
+    E1 --> COV[Coverage gate<br/>≥80% line+branch<br/>logic assemblies]
+    COV --> GREEN{all green?}
     GREEN -->|yes| MERGE[merge]
     GREEN -->|no| PR
 ```
@@ -272,10 +278,12 @@ src/
     Warehouse                   StarRocks Kimball loaders (SCD2 dims + facts)
     Telemetry                   Kafka JSON telemetry sink + ClickHouse HTTPS error sink
   DataFlowStudio.{Seed,Curation,WarehouseSink,Trace,Telemetry}   runnable consoles (drain / demo / verify)
+  DataFlowStudio.AppHost        .NET Aspire orchestrator — composes the Api + the consoles + dashboard (ADR-0013)
 tests/
-  DataFlowStudio.Architecture.Tests  NetArchTest boundary + no-EF rules
-  DataFlowStudio.Migrations.Tests    E1 gates (OltpDb up→down→up; sink idempotency) + profiles
-  DataFlowStudio.UnitTests           SharedKernel primitives · curation · sink SQL · telemetry wire
+  DataFlowStudio.Architecture.Tests  NetArchTest boundary + no-EF rules (6)
+  DataFlowStudio.Migrations.Tests    E1 gates (OltpDb up→down→up; sink idempotency) + profiles (container-gated)
+  DataFlowStudio.UnitTests           102 unit tests — curation projector/engine · SCD2 + fact loaders ·
+                                     telemetry dual-path · lineage emitter · option factories (seam-driven)
 docs/
   architecture.md   this file            adr/   decision records
   sql-showcase.md   advanced SQL         api/   openapi.yaml + asyncapi.yaml

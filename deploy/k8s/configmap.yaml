@@ -1,0 +1,15 @@
+# Non-secret endpoints. The secret values (connection strings with passwords + the Kafka mTLS PEMs) live
+# in the Secret (secret.example.yaml) — supply the real one from Vault / a sealed-secret, never commit it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dfs-endpoints
+  namespace: dataflow-studio
+data:
+  DFS_KAFKA_BOOTSTRAP: "192.168.10.21:9092,192.168.10.22:9092,192.168.10.23:9092"
+  DFS_KAFKA_CA: "/secrets/kafka-ca.pem"
+  DFS_KAFKA_CERT: "/secrets/kafka-cert.pem"
+  DFS_KAFKA_KEY: "/secrets/kafka-key.pem"
+  DFS_SR_URL: "https://192.168.10.91:8081"
+  DFS_OTLP_ENDPOINT: "https://192.168.70.182:4318"
+  DFS_MARQUEZ_ENDPOINT: "https://192.168.70.127"

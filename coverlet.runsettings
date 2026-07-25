@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverage settings for the E12 gate. Pass with: dotnet test [collect XPlat Code Coverage] [settings coverlet.runsettings].
+  The gate measures the solution's hand-written logic: source-generated code (System.Text.Json contexts and
+  LoggerMessage partials in *.g.cs) and trivial auto-property accessors are excluded so the number reflects
+  branches a test can actually exercise. Code marked [ExcludeFromCodeCoverage] (infrastructure-IO
+  boundaries + composition roots, see ADR-0012) is excluded by attribute.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverage</ExcludeByAttribute>
+          <ExcludeByFile>**/*.g.cs,**/*.Designer.cs</ExcludeByFile>
+          <SkipAutoProps>true</SkipAutoProps>
+          <UseSourceLink>false</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

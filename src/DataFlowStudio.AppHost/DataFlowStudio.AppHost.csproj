@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>dataflow-studio-apphost</UserSecretsId>
+    <!-- The AppHost is an application, not a documented library, and Aspire emits generated glue. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+  </ItemGroup>
+
+  <ItemGroup Label="Composed resources — the Api (always-on) + the pipeline worker consoles">
+    <ProjectReference Include="../DataFlowStudio.Api/DataFlowStudio.Api.csproj" />
+    <ProjectReference Include="../DataFlowStudio.Seed/DataFlowStudio.Seed.csproj" />
+    <ProjectReference Include="../DataFlowStudio.Curation/DataFlowStudio.Curation.csproj" />
+    <ProjectReference Include="../DataFlowStudio.WarehouseSink/DataFlowStudio.WarehouseSink.csproj" />
+    <ProjectReference Include="../DataFlowStudio.Trace/DataFlowStudio.Trace.csproj" />
+    <ProjectReference Include="../DataFlowStudio.Telemetry/DataFlowStudio.Telemetry.csproj" />
+  </ItemGroup>
+
+</Project>

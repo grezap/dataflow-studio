@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DataFlowStudio.Modules.Warehouse.Sink;
 using DataFlowStudio.SharedKernel;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +11,7 @@ namespace DataFlowStudio.Modules.Warehouse;
 /// It consumes the curated Avro topics and loads SCD2 dimensions + facts (ADR-0006). Its schema is
 /// migrated by <c>DataFlowStudio.Migrations.Starrocks</c> (DbUp, ADR-0005). Non-AOT (Avro), no EF Core.
 /// </summary>
+[ExcludeFromCodeCoverage] // DI composition root — wiring only; the wired components are unit-tested (ADR-0012).
 public sealed class WarehouseModule : IModule
 {
     /// <inheritdoc />

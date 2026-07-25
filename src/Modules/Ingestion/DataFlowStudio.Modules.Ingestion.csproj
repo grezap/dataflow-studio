@@ -16,6 +16,13 @@
     <ProjectReference Include="../../DataFlowStudio.SharedKernel/DataFlowStudio.SharedKernel.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The per-record curation step (TryCurateAsync) is internal but exercised directly by the unit
+         tests against a recording producer, so the parse → project → produce → telemetry path is
+         covered without a live Kafka. -->
+    <InternalsVisibleTo Include="DataFlowStudio.UnitTests" />
+  </ItemGroup>
+
   <ItemGroup Label="nexus-shared — Kafka + Avro + Schema Registry building blocks (E8)">
     <PackageReference Include="Nexus.Primitives" />
     <PackageReference Include="Nexus.Kafka" />

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using ClickHouse.Client.ADO;
@@ -11,6 +12,10 @@ namespace DataFlowStudio.Clickhouse;
 /// the OS store, and optionally presents a client certificate for mTLS. With no CA path it returns a
 /// plain connection (e.g. for a local test container over HTTP).
 /// </summary>
+// Private-CA TLS connection factory — the custom server-cert validation only runs during a live TLS
+// handshake, so this is exercised by the live ClickHouse error path + the Testcontainers gate, not unit
+// tests (ADR-0012).
+[ExcludeFromCodeCoverage]
 public static class TlsClickHouseConnectionFactory
 {
     /// <summary>

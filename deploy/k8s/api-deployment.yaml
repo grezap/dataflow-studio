@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dfs-api
+  namespace: dataflow-studio
+  labels:
+    app.kubernetes.io/name: dfs-api
+    app.kubernetes.io/part-of: dataflow-studio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dfs-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dfs-api
+        app.kubernetes.io/part-of: dataflow-studio
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654   # the .NET runtime image's non-root 'app' user ($APP_UID)
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dfs-api
+          image: dfs-api:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: dfs-endpoints
+            - secretRef:
+                name: dfs-credentials   # DFS_* connection strings (the *.pem keys are projected as files below)
+          volumeMounts:
+            - name: kafka-mtls
+              mountPath: /secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: kafka-mtls
+          secret:
+            secretName: dfs-credentials
+            items:
+              - { key: kafka-ca.pem, path: kafka-ca.pem }
+              - { key: kafka-cert.pem, path: kafka-cert.pem }
+              - { key: kafka-key.pem, path: kafka-key.pem }
+        - name: tmp   # writable scratch for the read-only root filesystem (.NET runtime temp)
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dfs-api
+  namespace: dataflow-studio
+  labels:
+    app.kubernetes.io/name: dfs-api
+spec:
+  selector:
+    app.kubernetes.io/name: dfs-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

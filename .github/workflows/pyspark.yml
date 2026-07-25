@@ -1,0 +1,48 @@
+name: pyspark
+
+# The Python leg (pyspark/ silver-layer conformance). Runs its own toolchain — Ruff + mypy --strict +
+# pytest on a local SparkSession (needs a JVM, hence setup-java). Path-filtered so it only runs when the
+# Python job changes.
+on:
+  push:
+    branches: [main]
+    paths: ["pyspark/**", ".github/workflows/pyspark.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["pyspark/**", ".github/workflows/pyspark.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pyspark
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Java (Spark runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup uv (+ Python)
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Sync (dev deps)
+        run: uv sync
+
+      - name: Ruff
+        run: uv run ruff check src tests
+
+      - name: mypy --strict
+        run: uv run mypy
+
+      - name: pytest (transform on a local SparkSession)
+        run: uv run pytest

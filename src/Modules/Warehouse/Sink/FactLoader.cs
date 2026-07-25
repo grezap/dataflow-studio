@@ -22,7 +22,7 @@ public sealed record SinkLookups(
 /// reload of the current snapshot, creates the partitions the batch needs, then batch-inserts.
 /// Incremental (per-change) fact loading is a later enhancement; the drain reloads the snapshot.
 /// </summary>
-public sealed class FactLoader(StarRocksClient client)
+public sealed class FactLoader(IStarRocksClient client)
 {
     /// <summary>fact_order — one row per order, with the customer surrogate key + order date key.</summary>
     public async Task LoadOrdersAsync(IReadOnlyCollection<GenericRecord> orders, SinkLookups lookups)

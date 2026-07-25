@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Avro.Generic;
 using Confluent.Kafka;
 using Confluent.Kafka.SyncOverAsync;
@@ -51,6 +52,10 @@ public sealed partial class WarehouseSinkEngine(
     /// consumed. Idempotent: dimensions upsert / SCD2, facts truncate-and-reload the current snapshot.
     /// </summary>
     /// <param name="cancellationToken">Stops the consume loop.</param>
+    // Kafka consume + live StarRocks connection orchestration — requires a live broker + StarRocks;
+    // exercised by the live load (handbook §1) not unit tests. The load logic is covered via
+    // LoadStarAsync against a recording IStarRocksClient (ADR-0012).
+    [ExcludeFromCodeCoverage]
     public async Task<IReadOnlyDictionary<string, int>> RunAsync(CancellationToken cancellationToken)
     {
         // Root span for the whole load (consume + every loader stage nests under it); the ClickHouse
@@ -69,9 +74,42 @@ public sealed partial class WarehouseSinkEngine(
         await using var client = new StarRocksClient(options.StarRocksConnection);
         await client.OpenAsync().ConfigureAwait(false);
 
+        var counts = await LoadStarAsync(byTopic, client, traceId, DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
+
+        int total = counts.Values.Sum();
+        runStopwatch.Stop();
+        runActivity?.SetTag("dfs.records", total);
+
+        // A run-summary stage event (the whole load's latency + total records), then flush telemetry.
+        telemetry.RecordStage(new PipelineStageEvent(
+            DateTimeOffset.UtcNow, traceId, PipelineName, "load", "ok",
+            (uint)runStopwatch.ElapsedMilliseconds, $"{{\"records\":{total}}}"));
+        await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // OpenLineage COMPLETE: the DWH tables are the run's outputs → the curated → DWH lineage edge.
+        await lineage.CompleteAsync(PipelineName, traceId, Topics, DwhDatasets, CancellationToken.None).ConfigureAwait(false);
+
+        LogLoaded(logger, total);
+        return counts;
+    }
+
+    /// <summary>
+    /// Loads the Kimball star from an already-consumed curated snapshot (<paramref name="byTopic"/>)
+    /// into StarRocks via the supplied <see cref="IStarRocksClient"/>, in dependency order (dimensions
+    /// before facts, categories before products, orders before order lines). Each stage is timed and
+    /// emitted as a <c>warehouse-sink</c> pipeline event; a failing stage emits a structured error
+    /// before rethrowing. Split out from <see cref="RunAsync"/> so the load orchestration is testable
+    /// against a recording fake, independent of Kafka. Returns the per-entity curated record count.
+    /// </summary>
+    internal async Task<IReadOnlyDictionary<string, int>> LoadStarAsync(
+        IReadOnlyDictionary<string, Dictionary<string, GenericRecord>> byTopic,
+        IStarRocksClient client,
+        string traceId,
+        DateTime batchUtc,
+        CancellationToken cancellationToken)
+    {
         var dim = new DimensionLoader(client);
         var fact = new FactLoader(client);
-        var batchUtc = DateTime.UtcNow;
 
         // Times one loader stage, emits a warehouse-sink pipeline event, and re-raises (as an error
         // event) any failure so a bad load is both observable and still fatal to the run.
@@ -142,25 +180,11 @@ public sealed partial class WarehouseSinkEngine(
         await Stage("fact_transaction", () => fact.LoadTransactionsAsync(transactions)).ConfigureAwait(false);
         await Stage("fact_inventory_snap", () => fact.LoadInventoryAsync(Records("dfs.product-inventory.changed.v1"), lookups, batchUtc)).ConfigureAwait(false);
 
-        var counts = byTopic.ToDictionary(kv => Entity(kv.Key), kv => kv.Value.Count, StringComparer.Ordinal);
-        int total = counts.Values.Sum();
-        runStopwatch.Stop();
-        runActivity?.SetTag("dfs.records", total);
-
-        // A run-summary stage event (the whole load's latency + total records), then flush telemetry.
-        telemetry.RecordStage(new PipelineStageEvent(
-            DateTimeOffset.UtcNow, traceId, PipelineName, "load", "ok",
-            (uint)runStopwatch.ElapsedMilliseconds, $"{{\"records\":{total}}}"));
-        await telemetry.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-
-        // OpenLineage COMPLETE: the DWH tables are the run's outputs → the curated → DWH lineage edge.
-        await lineage.CompleteAsync(PipelineName, traceId, Topics, DwhDatasets, CancellationToken.None).ConfigureAwait(false);
-
-        LogLoaded(logger, total);
-        return counts;
+        return byTopic.ToDictionary(kv => Entity(kv.Key), kv => kv.Value.Count, StringComparer.Ordinal);
     }
 
     // Consume every curated topic to idle, keeping the latest record per message key (natural key).
+    [ExcludeFromCodeCoverage] // Kafka consume loop — requires a live broker + Schema Registry.
     private Dictionary<string, Dictionary<string, GenericRecord>> ConsumeSnapshot(CancellationToken cancellationToken)
     {
         var byTopic = Topics.ToDictionary(t => t, _ => new Dictionary<string, GenericRecord>(StringComparer.Ordinal), StringComparer.Ordinal);

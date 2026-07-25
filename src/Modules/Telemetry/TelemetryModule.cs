@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DataFlowStudio.Lineage;
 using DataFlowStudio.SharedKernel;
 using DataFlowStudio.SharedKernel.Lineage;
@@ -18,6 +19,7 @@ namespace DataFlowStudio.Modules.Telemetry;
 /// pipeline isn't wired) so the Ingestion / Warehouse engines can depend on the abstraction. E16: wires
 /// OpenTelemetry export when an OTLP endpoint is configured (the obs tier is off otherwise).
 /// </summary>
+[ExcludeFromCodeCoverage] // DI composition root — wiring only; the wired components are unit-tested (ADR-0012).
 public sealed class TelemetryModule : IModule
 {
     /// <inheritdoc />
@@ -34,6 +36,7 @@ public sealed class TelemetryModule : IModule
         {
             services.AddSingleton(options);
             services.AddSingleton<ClickHouseErrorSink>();
+            services.AddSingleton<IErrorFallbackSink>(sp => sp.GetRequiredService<ClickHouseErrorSink>());
             services.AddSingleton<KafkaTelemetrySink>();
             services.AddSingleton<IPipelineTelemetrySink>(sp => sp.GetRequiredService<KafkaTelemetrySink>());
             services.AddHostedService<TelemetryTopicInitializer>();
