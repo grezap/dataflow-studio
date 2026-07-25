@@ -39,13 +39,25 @@ jobs:
             --build-arg ENTRY_DLL=DataFlowStudio.Api.dll \
             -f deploy/Dockerfile -t dfs-api:latest .
 
-      - name: Install ffmpeg + fonts (vhs-action's own ffmpeg install is flaky on the runner)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      # Install VHS + its deps manually — charmbracelet/vhs-action@v2's own ffmpeg install is broken on
+      # the current runner ("Failed to install ffmpeg"), so we provision the tools ourselves.
+      - name: Install VHS + ttyd + ffmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+          ttyd_url=$(curl -fsSL https://api.github.com/repos/tsl0922/ttyd/releases/latest \
+            | grep -o 'https://[^"]*ttyd\.x86_64' | head -1)
+          sudo curl -fsSL "$ttyd_url" -o /usr/local/bin/ttyd && sudo chmod +x /usr/local/bin/ttyd
+          vhs_asset=$(curl -fsSL https://api.github.com/repos/charmbracelet/vhs/releases/latest \
+            | grep -o 'https://[^"]*Linux_x86_64\.tar\.gz' | head -1)
+          curl -fsSL "$vhs_asset" -o /tmp/vhs.tgz
+          tar -xzf /tmp/vhs.tgz -C /tmp
+          sudo find /tmp -maxdepth 2 -name vhs -type f -exec mv {} /usr/local/bin/vhs \;
+          sudo chmod +x /usr/local/bin/vhs
+          vhs --version && ttyd --version && ffmpeg -version | head -1
 
       - name: Render the tape to a GIF
-        uses: charmbracelet/vhs-action@v2
-        with:
-          path: scripts/demo.tape
+        run: vhs scripts/demo.tape
 
       - name: Upload the GIF
         uses: actions/upload-artifact@v4
