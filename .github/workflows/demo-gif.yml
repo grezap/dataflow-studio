@@ -39,6 +39,9 @@ jobs:
             --build-arg ENTRY_DLL=DataFlowStudio.Api.dll \
             -f deploy/Dockerfile -t dfs-api:latest .
 
+      - name: Install ffmpeg + fonts (vhs-action's own ffmpeg install is flaky on the runner)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+
       - name: Render the tape to a GIF
         uses: charmbracelet/vhs-action@v2
         with:
