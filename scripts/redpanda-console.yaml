@@ -1,0 +1,31 @@
+# Redpanda Console — DataFlow Studio lab connection.
+#
+# Browse the raw oltp.* JSON topics (Face 3) and the curated dfs.*.changed.v1 Avro topics (Face 4,
+# decoded via Schema Registry) in a browser at http://localhost:8080.
+#
+# Run from the REPO ROOT so the relative .secrets/ cert paths resolve — scripts\dfs-kafka-console.ps1
+# does this for you and also reissues the 24h mTLS client certificate before launching.
+kafka:
+  brokers:
+    - 192.168.10.21:9092
+    - 192.168.10.22:9092
+    - 192.168.10.23:9092
+  tls:
+    enabled: true
+    caFilepath: .secrets/kafka-ca.crt        # lab CA bundle (brokers send full chain → root-only is fine)
+    certFilepath: .secrets/kafka-client.crt  # 24h client identity issued by any dfs-*.ps1
+    keyFilepath: .secrets/kafka-client.key
+    insecureSkipTlsVerify: false             # broker certs carry .10.x IP SANs; flip to true if the handshake fails
+
+schemaRegistry:
+  enabled: true
+  urls:
+    - https://192.168.10.91:8081
+  tls:
+    enabled: true
+    # SR is server-TLS only (no client cert). The lab CA bundle is root-only and SR presents just its
+    # leaf, so skip chain verification here — the lab shortcut, equivalent to sslmode=none.
+    insecureSkipTlsVerify: true
+
+server:
+  listenPort: 8080
