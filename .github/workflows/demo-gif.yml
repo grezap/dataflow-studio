@@ -60,7 +60,7 @@ jobs:
         run: vhs scripts/demo.tape
 
       - name: Upload the GIF
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dataflow-studio-demo-gif
           path: docs/media/dataflow-studio-demo.gif
