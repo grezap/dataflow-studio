@@ -6,6 +6,19 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Added — Redpanda Console: browser GUI for the Kafka faces (demo tooling)
+
+- **[`scripts/redpanda-console.yaml`](scripts/redpanda-console.yaml)** + **[`scripts/dfs-kafka-console.ps1`](scripts/dfs-kafka-console.ps1)**
+  bring up [Redpanda Console](https://github.com/redpanda-data/console) against the live lab so the raw
+  `oltp.*` JSON topics (Face 3) and the curated `dfs.*.changed.v1` Avro topics (Face 4, decoded via the
+  Schema Registry) are browsable at `http://localhost:8080`. The launcher reissues the 24h Kafka mTLS
+  client cert into `.secrets\` (same material as the other `dfs-*.ps1`), then starts the console; the
+  config reads the lab's **PEM** material directly — no PKCS12/JKS conversion, unlike the JVM desktop
+  tools. Run the Windows binary on the build host (not Docker) so it can reach the `.10` Kafka backplane.
+- **[`docs/demos/watch-the-pipeline.md`](docs/demos/watch-the-pipeline.md)** — the "GUI alternative for
+  Kafka" section is promoted from a two-line pointer to a full Redpanda Console walkthrough (download,
+  launch, what to look for), with Offset Explorer / Conduktor kept as a JVM-keystore footnote.
+
 ### Added — Portfolio walkthrough + recording (Week 4)
 
 - **[`docs/demo.md`](docs/demo.md)** — a five-minute persona tour of v0.1.0 (one solution → tested to the

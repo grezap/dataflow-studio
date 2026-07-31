@@ -290,9 +290,48 @@ remote-write. Full walk-through + the verify commands: handbook §1.8b (ADR-0010
 
 ---
 
-## GUI alternative for Kafka (optional)
+## GUI alternative for Kafka — Redpanda Console
 
-If you prefer a GUI over the console tools, **Offset Explorer** (Kafka Tool) or **Conduktor** can
-connect with the same mTLS material: point them at `192.168.10.21:9092`, security = SSL, and import
-`.secrets\kafka-client.crt` + `kafka-client.key` + `kafka-ca.crt` (the files `dfs-trace.ps1` writes)
-as the keystore/truststore. The console commands above are the reliable, always-works path.
+If you prefer a browser UI over the console tools, **Redpanda Console** shows both the raw `oltp.*`
+JSON topics and the curated `dfs.*.changed.v1` **Avro** topics (decoded against the Schema Registry),
+with search, per-partition offsets, and the registered schemas side by side. It reads the lab's PEM
+mTLS material *directly* — no keystore conversion — which the JVM desktop tools (Offset Explorer,
+Conduktor) can't. Run the **Windows binary on the build host** (not Docker): it uses the host network
+stack, so it reaches the `.10` Kafka backplane exactly like the `dfs-*.ps1` scripts do; a container in
+Docker Desktop's WSL VM would not have a route to the VMware backplane.
+
+**1. Download the Windows binary** (once — v3.9.0 or later):
+
+```powershell
+$dest = "$HOME\tools\redpanda-console"
+New-Item -ItemType Directory -Force -Path $dest | Out-Null
+Invoke-WebRequest 'https://github.com/redpanda-data/console/releases/download/v3.9.0/redpanda_console_3.9.0_windows_amd64.zip' -OutFile "$dest\console.zip"
+Expand-Archive "$dest\console.zip" -DestinationPath $dest -Force
+```
+
+**2. Launch it.** `scripts\dfs-kafka-console.ps1` reissues the 24h Kafka mTLS cert into `.secrets\` and
+starts the console with [`scripts/redpanda-console.yaml`](../../scripts/redpanda-console.yaml):
+
+```powershell
+.\scripts\dfs-kafka-console.ps1 -ConsoleExe "$HOME\tools\redpanda-console\redpanda-console.exe"
+```
+
+**3. Open** `http://localhost:8080`. Under **Topics**:
+
+- `oltp.OltpDb.dbo.Customers` — the raw Debezium JSON (Face 3); filter for `TOUR-001`.
+- `dfs.customers.changed.v1` — the curated Avro (Face 4), decoded to JSON with its schema shown.
+- The **Schema Registry** page lists the `dfs.*.changed.v1-value` subjects and their versions.
+
+The connection (brokers on the `.10` backplane with the `.secrets\` PEM client cert + CA; Schema
+Registry at `https://192.168.10.91:8081`, server-TLS with verification skipped because the lab CA
+bundle is root-only) is defined in the YAML above.
+
+> Certs are 24h TTL — if the console can't connect after a day, re-run the launcher (or any
+> `dfs-*.ps1`) to reissue. If the broker handshake fails on a hostname/SAN mismatch, set
+> `kafka.tls.insecureSkipTlsVerify: true` in the YAML.
+
+**Other GUIs (JVM, need a keystore):** **Offset Explorer** or **Conduktor** also work, but being JVM
+tools they want a PKCS12/JKS keystore — convert with `openssl pkcs12 -export -in
+.secrets\kafka-client.crt -inkey .secrets\kafka-client.key -out .secrets\kafka-keystore.p12`, import
+`kafka-ca.crt` as the truststore, and point them at `192.168.10.21:9092` (security = SSL). The console
+commands earlier in this doc remain the always-works path.
