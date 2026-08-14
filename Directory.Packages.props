@@ -34,7 +34,7 @@
     <!-- dbup-mysql drives StarRocks (MySQL wire on :9030) via MySqlConnector, not Oracle MySql.Data. -->
     <PackageVersion Include="dbup-core" Version="6.1.1" />
     <PackageVersion Include="dbup-mysql" Version="6.1.0" />
-    <PackageVersion Include="MySqlConnector" Version="2.6.1" />
+    <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <!-- ClickHouse has no DbUp provider; a purpose-built DbUp-pattern runner talks to it over ADO. -->
     <PackageVersion Include="ClickHouse.Client" Version="7.14.0" />
   </ItemGroup>
