@@ -71,9 +71,9 @@
     <!-- All Testcontainers packages must share one core version (a module built against a different
          core throws MissingMethodException at runtime). Sink gates add a ClickHouse module + the base
          package for the StarRocks allin1 image (no dedicated Testcontainers.StarRocks module). -->
-    <PackageVersion Include="Testcontainers" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.ClickHouse" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.ClickHouse" Version="4.15.0" />
   </ItemGroup>
 
 </Project>
