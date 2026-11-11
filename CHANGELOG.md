@@ -6,6 +6,20 @@ All notable changes to DataFlow Studio are documented here. The format is based 
 
 ## [Unreleased]
 
+### Fixed — clean rebuild + local Docker Desktop apply (Part A packaging)
+
+- **`Directory.Packages.props`** — transitive-pin `System.Security.Cryptography.Pkcs` to **9.0.23**. A
+  post-seal advisory (`NU1902`/`NU1903`, fixed 2026-10 Patch Tuesday) made a clean `v0.1.0` rebuild fail
+  restore under `TreatWarningsAsErrors`, since NuGet audit checks the live advisory DB on every restore.
+  Pinned up to the patched 9.0.x exactly like the existing `Microsoft.OpenApi` pin (handbook §3.2 T33).
+- **[`deploy/k8s-local/`](deploy/k8s-local/kustomization.yaml)** — a local-only kustomize overlay (sibling
+  of `k8s/`) for a Docker Desktop apply with no lab: patches `imagePullPolicy: IfNotPresent` (the local
+  `dfs-api:latest` would otherwise `ErrImagePull`) and blanks `DFS_KAFKA_BOOTSTRAP` so the Telemetry module
+  registers the `NullPipelineTelemetrySink` instead of eagerly building a Kafka producer that SIGSEGVs on
+  the example Secret's placeholder PEM (exit 139, `CrashLoopBackOff`). See handbook §3.2 T34–T35.
+- **Docs** — handbook §3.2 gains **T33–T35**; `deploy/README.md` gains a clean-rebuild advisory note and a
+  "Local apply (Docker Desktop, no lab)" section.
+
 ### Added — Redpanda Console: browser GUI for the Kafka faces (demo tooling)
 
 - **[`scripts/redpanda-console.yaml`](scripts/redpanda-console.yaml)** + **[`scripts/dfs-kafka-console.ps1`](scripts/dfs-kafka-console.ps1)**
