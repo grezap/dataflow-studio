@@ -25,6 +25,11 @@ DOCKER_BUILDKIT=1 GITHUB_PACKAGES_TOKEN=$(gh auth token) docker build \
   -f deploy/Dockerfile -t dfs-api:latest .
 ```
 
+> **Clean-rebuild advisory drift:** if a from-scratch build fails restore with `NU1902`/`NU1903` on a
+> *transitive* package, a security advisory was published against it after this repo was last built —
+> NuGet audit checks the live advisory DB on every restore and `TreatWarningsAsErrors` makes it fatal.
+> Transitive-pin the package up to its patched version in `Directory.Packages.props` (see handbook §3.2 T33).
+
 ## docker-compose (laptop)
 
 ```bash
@@ -83,3 +88,32 @@ kubectl apply -f deploy/k8s/job-curation.yaml
 
 Every workload runs non-root with `allowPrivilegeEscalation: false`, a read-only root filesystem, and all
 capabilities dropped; the Api has liveness + readiness probes on `/health`.
+
+### Local apply (Docker Desktop, no lab)
+
+To run the always-on Api on a laptop Kubernetes (Docker Desktop) against **no backends** — a packaging /
+boot smoke, not a live pipeline — use the local overlay [`k8s-local/`](k8s-local/kustomization.yaml), a
+**sibling** of `k8s/` that layers two local-only patches over the base. No registry, no real Secret, no VMs:
+
+```bash
+# 1. Build dfs-api into the local daemon (see "Images"); the Docker Desktop kubelet shares that store.
+# 2. Apply the overlay — it reuses the example Secret's placeholder values (/health never touches a backend):
+kubectl apply -k deploy/k8s-local
+kubectl -n dataflow-studio rollout status deployment/dfs-api
+kubectl -n dataflow-studio port-forward deploy/dfs-api 8080:8080   # -> curl http://localhost:8080/health
+```
+
+The overlay exists because a local apply hits two things a registry + Vault deploy does not:
+
+- **`imagePullPolicy: IfNotPresent`** — `dfs-api:latest` lives only in the local daemon, but a `:latest`
+  tag defaults to `Always`, so the kubelet would `ErrImagePull` trying to reach a registry.
+- **`DFS_KAFKA_BOOTSTRAP: ""`** — the Telemetry module builds its Kafka producer **eagerly at startup**,
+  and the producer *parses* the mTLS CA PEM at build time. `secret.example.yaml`'s `CHANGEME` placeholders
+  are not valid PEM, so librdkafka SIGSEGVs (exit 139, `CrashLoopBackOff`). Blanking the bootstrap flips the
+  `TelemetryOptionsFactory` gate to the `NullPipelineTelemetrySink` — no producer, clean boot. (To exercise
+  the real producer instead, mount valid/throwaway PEMs in a real Secret; it connects lazily, so an offline
+  broker is a harmless background retry.)
+
+> This overlay is **local-only** — not a production manifest. In the lab, supply the real `dfs-credentials`
+> Secret out-of-band (Vault Secrets Operator / CSI) and leave `imagePullPolicy` at its default.
+> Full incident detail: handbook §3.2 **T33–T35**.

@@ -1,0 +1,39 @@
+# LOCAL-ONLY overlay for Docker Desktop (not for the lab — do not commit as a prod manifest).
+#
+# Lives as a SIBLING of deploy/k8s (not a child) — kustomize rejects an overlay nested inside the
+# base it references, as a resource cycle.
+#
+# Two local-apply patches, both on the Api Deployment:
+#
+#   1. imagePullPolicy: IfNotPresent
+#      The base deploys image dfs-api:latest. A ":latest" tag defaults to imagePullPolicy: Always, so
+#      the kubelet would try to pull it from a registry and ErrImagePull — the image exists only in the
+#      local Docker daemon. IfNotPresent makes the kubelet use the locally-built image.
+#
+#   2. DFS_KAFKA_BOOTSTRAP: ""  (an explicit env entry overrides the ConfigMap value from envFrom)
+#      The base wires the Telemetry module to Kafka (bootstrap + the three kafka-*.pem files from the
+#      Secret). With secret.example.yaml's placeholder "CHANGEME" PEMs, the Confluent producer PARSES
+#      the CA file eagerly at host startup (TelemetryOptionsFactory gate -> KafkaTelemetrySink ctor ->
+#      ProducerBuilder.Build()) and librdkafka SIGSEGVs on the invalid PEM (exit 139, CrashLoopBackOff).
+#      Blanking the bootstrap makes TelemetryOptionsFactory.TryFromConfiguration return false, so the
+#      module registers the NullPipelineTelemetrySink instead — no producer, clean boot, /health green.
+#      This mirrors the standalone `docker run` (Step 3), which had no Kafka config at all.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../k8s                    # the always-on base (namespace, configmap, secret.example, api-deployment)
+
+patches:
+  - target:
+      kind: Deployment
+      name: dfs-api
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: DFS_KAFKA_BOOTSTRAP
+            value: ""
